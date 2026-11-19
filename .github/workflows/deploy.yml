@@ -1,8 +1,9 @@
 name: Deploy
 
-# Puts an image that is already on Docker Hub onto the server: copies
-# deploy/compose.yml and deploy/Caddyfile to /opt/kickoff, pulls, restarts and
-# waits for /healthz. The server's own /opt/kickoff/.env is never touched.
+# Puts an image that is already on Docker Hub onto the server: copies the files
+# in deploy/ to /opt/kickoff and runs deploy.sh there, which replaces Redis and
+# both Go servers with fresh containers and waits for /healthz. The server's
+# own /opt/kickoff/.env is never touched.
 on:
   workflow_run:
     workflows: [Build and push]
@@ -65,24 +66,12 @@ jobs:
           } > ~/.ssh/config
 
       - name: Copy the stack files
-        run: scp deploy/compose.yml deploy/Caddyfile "server:$DIR/"
+        run: scp -p deploy/compose.yml deploy/Caddyfile deploy/deploy.sh "server:$DIR/"
 
-      - name: Pull and restart
-        run: |
-          ssh server "cd $DIR && test -f .env || { echo 'Missing $DIR/.env on the server.'; exit 1; }
-            export IMAGE_TAG=$TAG
-            docker compose pull --quiet &&
-            docker compose up -d --remove-orphans &&
-            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile &&
-            docker image prune -f >/dev/null"
-
-      - name: Wait for the server to answer
-        run: |
-          ssh server "cd $DIR && for i in \$(seq 1 30); do
-              docker compose exec -T caddy wget -qO- http://backend:8080/healthz && exit 0
-              sleep 2
-            done
-            docker compose ps; docker compose logs --tail 40 backend; exit 1"
+      # Replaces Redis and both Go servers (one at a time) and waits for each
+      # to answer /healthz; see deploy/deploy.sh.
+      - name: Replace the containers
+        run: ssh server "IMAGE_TAG=$TAG $DIR/deploy.sh"
 
       - name: Remove the key
         if: always()

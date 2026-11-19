@@ -57,9 +57,11 @@ Versiunea de Node vine din `frontend/.node-version`. Funcția
 `BACKEND_URL`, deci browserul vorbește cu o singură origine, la fel ca prin proxy-ul Vite local.
 Pentru test local cu `wrangler pages dev`, cele două valori se pun în `frontend/.dev.vars`.
 
-**Serverul Go** rulează în Docker pe un server propriu, în spatele lui Caddy. Fișierele sunt în
-[deploy/](deploy/). Caddy refuză orice cerere fără `PROXY_SECRET`, deci serverul Go e accesibil
-doar prin site, iar adresa jucătorului vine de la funcția Pages.
+**Serverul Go** rulează în Docker pe un server propriu, în două copii (`backend-a`, `backend-b`)
+în spatele lui Caddy, care împarte cererile între ele și o ocolește pe cea oprită. Starea e în
+MongoDB, iar un Redis intern duce între cele două copii semnalul pentru WebSocket și limitele
+per cont. Fișierele sunt în [deploy/](deploy/). Caddy refuză orice cerere fără `PROXY_SECRET`,
+deci serverul Go e accesibil doar prin site, iar adresa jucătorului vine de la funcția Pages.
 
 Domeniul API-ului stă în spatele proxy-ului Cloudflare (nor portocaliu), cu SSL/TLS pe modul
 **Full**. Certificatul public e al lui Cloudflare și se reînnoiește singur; între Cloudflare și
@@ -79,7 +81,7 @@ nano /opt/kickoff/.env && chmod 600 /opt/kickoff/.env             # după modelu
 | --- | --- | --- |
 | `ci.yml` | orice push și pull request | format, vet, teste Go; typecheck și build frontend |
 | `build-and-push.yml` | push pe `main` care atinge `backend/` | teste, apoi imagine `linux/amd64` + `linux/arm64` pe Docker Hub (`<commit>` și `latest`) |
-| `deploy.yml` | după `build-and-push.yml` reușit, sau manual cu un tag | copiază `deploy/` pe server, `docker compose pull && up -d`, așteaptă `/healthz` |
+| `deploy.yml` | după `build-and-push.yml` reușit, sau manual cu un tag | copiază `deploy/` pe server și rulează `deploy.sh`: Redis și cele două servere Go sunt recreate (serverele pe rând, fără întrerupere), cu așteptarea lui `/healthz` |
 
 Setări în repo (Settings > Secrets and variables > Actions):
 
@@ -96,8 +98,7 @@ Setări în repo (Settings > Secrets and variables > Actions):
 O schimbare doar în `deploy/` se aplică rulând manual `deploy.yml`. Întoarcerea la o versiune
 mai veche: `deploy.yml` manual, cu sha-ul acelui commit ca tag.
 
-Stiva din `deploy/` a fost rulată local (poartă cu secret, `/healthz`, verificarea de origine).
-Publicarea pe Cloudflare Pages și pe server nu a fost încă rulată cap-coadă.
+Limita de cereri per IP e ținută de fiecare copie separat; doar limitele per cont sunt comune.
 
 ## Structură
 

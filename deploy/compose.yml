@@ -1,30 +1,58 @@
-# Production stack for one server. Lives in /opt/kickoff next to the Caddyfile
-# and a hand-written .env (see deploy/.env.example). The deploy workflow copies
-# this file and the Caddyfile there; it never touches .env.
+# Production stack for one server. Lives in /opt/kickoff next to the Caddyfile,
+# deploy.sh and a hand-written .env (see deploy/.env.example). The deploy
+# workflow copies these files there; it never touches .env.
+#
+# Two copies of the Go server run behind Caddy, the same shape as a larger
+# setup: all state is in MongoDB, and Redis carries the "something changed"
+# signal between the copies (for WebSockets) and their shared account limits.
 name: kickoff
 
+x-backend: &backend
+  image: ${IMAGE:?set IMAGE in .env}:${IMAGE_TAG:-latest}
+  restart: unless-stopped
+  depends_on:
+    redis:
+      condition: service_healthy
+  env_file: .env
+  environment:
+    ADDR: 0.0.0.0:8080
+    COOKIE_SECURE: "true"
+    # Safe only because Caddy below is the single way in and overwrites
+    # X-Forwarded-For itself.
+    TRUST_PROXY: "true"
+    REDIS_URL: redis://redis:6379
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  stop_grace_period: 15s
+  logging:
+    options: { max-size: "10m", max-file: "5" }
+
 services:
-  backend:
-    image: ${IMAGE:?set IMAGE in .env}:${IMAGE_TAG:-latest}
+  backend-a: *backend
+  backend-b: *backend
+
+  # Not published: reachable only from the two servers above. Nothing in it is
+  # worth keeping (wake-up signals and rate-limit counters), so no persistence.
+  redis:
+    image: redis:8-alpine
     restart: unless-stopped
-    env_file: .env
-    environment:
-      ADDR: 0.0.0.0:8080
-      COOKIE_SECURE: "true"
-      # Safe only because Caddy below is the single way in and overwrites
-      # X-Forwarded-For itself.
-      TRUST_PROXY: "true"
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
     read_only: true
+    tmpfs: [/data]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
     logging:
-      options: { max-size: "10m", max-file: "5" }
+      options: { max-size: "10m", max-file: "3" }
 
   caddy:
     image: caddy:2
     restart: unless-stopped
-    depends_on: [backend]
     ports:
       - "80:80"
       - "443:443"
