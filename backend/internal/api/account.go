@@ -73,6 +73,12 @@ func (s *Server) send(m mailer.Message) {
 
 // The secret travels in the URL fragment, which browsers never send to a
 // server, so it stays out of access logs and Referer headers.
+// letter fills in what every account email shares: who it goes to and where the game lives.
+func (s *Server) letter(u *store.User, l mailer.Letter) mailer.Message {
+	l.To, l.Name, l.Site = u.Email, u.Name, s.cfg.PublicURL
+	return l.Message()
+}
+
 func (s *Server) link(kind, tok string) string {
 	return strings.TrimRight(s.cfg.PublicURL, "/") + "/#" + kind + "=" + tok
 }
@@ -86,9 +92,10 @@ func (s *Server) sendVerify(r *http.Request, u *store.User) {
 		s.log.Error("verify token failed", "err", err)
 		return
 	}
-	s.send(mailer.Message{To: u.Email, Subject: "Confirm your email address",
-		Body: "Hi " + u.Name + ",\n\nConfirm this address for your manager account by opening:\n\n" + s.link("verify", tok) +
-			"\n\nThe link works once and expires in 24 hours. If you did not create this account, ignore this message.\n"})
+	s.send(s.letter(u, mailer.Letter{Subject: "Confirm your email address",
+		Text:   "Welcome to the dugout. Confirm this address to finish setting up your manager account.",
+		Button: "Confirm my address", URL: s.link("verify", tok),
+		Note: "The link works once and expires in 24 hours. If you did not create this account, ignore this message."}))
 }
 
 func (s *Server) verifyEmail(w http.ResponseWriter, r *http.Request) {
@@ -142,9 +149,10 @@ func (s *Server) forgot(w http.ResponseWriter, r *http.Request) {
 		s.log.Error("reset token failed", "err", err)
 		return
 	}
-	s.send(mailer.Message{To: u.Email, Subject: "Reset your password",
-		Body: "Hi " + u.Name + ",\n\nChoose a new password by opening:\n\n" + s.link("reset", tok) +
-			"\n\nThe link works once and expires in 30 minutes. If you did not ask for it, ignore this message: your password stays as it is.\n"})
+	s.send(s.letter(u, mailer.Letter{Subject: "Reset your password",
+		Text:   "Someone asked for a new password for your manager account. Choose one with the button below.",
+		Button: "Choose a new password", URL: s.link("reset", tok),
+		Note: "The link works once and expires in 30 minutes. If you did not ask for it, ignore this message: your password stays as it is."}))
 }
 
 func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
@@ -272,8 +280,9 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request, uid stri
 	_ = s.st.DeleteUserSessions(r.Context(), uid, s.currentSession(r))
 	_ = s.st.DeleteTokens(r.Context(), uid, "reset")
 	if u.Verified {
-		s.send(mailer.Message{To: u.Email, Subject: "Your password was changed",
-			Body: "Hi " + u.Name + ",\n\nThe password of your manager account was just changed from your profile. If that was not you, reset it now with \"Forgot password\" on the sign-in page.\n"})
+		s.send(s.letter(u, mailer.Letter{Subject: "Your password was changed",
+			Text: "The password of your manager account was just changed from your profile.",
+			Note: "If that was not you, reset it now with \"Forgot password\" on the sign-in page."}))
 	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
@@ -310,8 +319,9 @@ func (s *Server) changeEmail(w http.ResponseWriter, r *http.Request, uid string)
 	// Links mailed to the old address stop working.
 	_ = s.st.DeleteTokens(r.Context(), uid, "reset")
 	if u.Verified {
-		s.send(mailer.Message{To: u.Email, Subject: "Your email address was changed",
-			Body: "Hi " + u.Name + ",\n\nThe email address of your manager account was changed to another one. If that was not you, sign in and change your password.\n"})
+		s.send(s.letter(u, mailer.Letter{Subject: "Your email address was changed",
+			Text: "The email address of your manager account was changed to another one.",
+			Note: "If that was not you, sign in and change your password."}))
 	}
 	u.Email, u.EmailKey = email, key
 	s.sendVerify(r, u)

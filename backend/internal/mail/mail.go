@@ -1,14 +1,22 @@
-// Package mail sends the two account emails: confirm your address and reset
-// your password. With SMTP_HOST set it talks to a real mail server; without
+// Package mail sends the account emails (confirm your address, reset or
+// changed password, changed address), as plain text plus HTML in the colours
+// of the site. With SMTP_HOST set it talks to a real mail server; without
 // it, messages are written to the server log so the demo works offline.
 package mail
 
 import (
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"log/slog"
+	"mime/multipart"
+	"mime/quotedprintable"
 	"net"
 	netmail "net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strings"
 	"time"
 )
@@ -16,7 +24,8 @@ import (
 type Message struct {
 	To      string
 	Subject string
-	Body    string // plain text
+	Body    string // plain text, always present
+	HTML    string // optional: the same letter for mail programs that show HTML
 }
 
 type Mailer interface {
@@ -53,11 +62,49 @@ func (s SMTP) Send(m Message) error {
 	if s.User != "" {
 		auth = smtp.PlainAuth("", s.User, s.Pass, s.Host)
 	}
-	to := clean(m.To)
 	header, sender := sender(s.From)
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n",
-		header, to, clean(m.Subject), time.Now().UTC().Format(time.RFC1123Z), strings.ReplaceAll(m.Body, "\n", "\r\n"))
-	return smtp.SendMail(net.JoinHostPort(s.Host, s.Port), auth, sender, []string{to}, []byte(msg))
+	return smtp.SendMail(net.JoinHostPort(s.Host, s.Port), auth, sender, []string{clean(m.To)}, raw(header, sender, m, time.Now()))
+}
+
+// raw writes the message as it travels: headers, then the plain text, and the
+// HTML form next to it when there is one. A mail program shows the richest
+// form it understands. Bodies are quoted-printable, which keeps every line
+// short and survives any mail server.
+func raw(from, sender string, m Message, now time.Time) []byte {
+	var b bytes.Buffer
+	domain := "localhost"
+	if at := strings.LastIndex(sender, "@"); at >= 0 && at < len(sender)-1 {
+		domain = sender[at+1:]
+	}
+	var id [12]byte
+	_, _ = rand.Read(id[:])
+	fmt.Fprintf(&b, "From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: <%s@%s>\r\nMIME-Version: 1.0\r\n",
+		from, clean(m.To), clean(m.Subject), now.UTC().Format(time.RFC1123Z), hex.EncodeToString(id[:]), domain)
+
+	part := func(w io.Writer, body string) {
+		q := quotedprintable.NewWriter(w)
+		_, _ = q.Write([]byte(strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\n", "\r\n")))
+		_ = q.Close()
+	}
+	if m.HTML == "" {
+		b.WriteString("Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n")
+		part(&b, m.Body)
+		return b.Bytes()
+	}
+	mw := multipart.NewWriter(&b)
+	fmt.Fprintf(&b, "Content-Type: multipart/alternative; boundary=%q\r\n\r\n", mw.Boundary())
+	for _, p := range []struct{ kind, body string }{{"text/plain", m.Body}, {"text/html", m.HTML}} {
+		w, err := mw.CreatePart(textproto.MIMEHeader{
+			"Content-Type":              {p.kind + "; charset=utf-8"},
+			"Content-Transfer-Encoding": {"quoted-printable"},
+		})
+		if err != nil {
+			continue
+		}
+		part(w, p.body)
+	}
+	_ = mw.Close()
+	return b.Bytes()
 }
 
 // sender splits MAIL_FROM into the From header and the bare address the mail
