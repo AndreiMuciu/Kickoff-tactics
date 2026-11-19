@@ -57,14 +57,18 @@ Versiunea de Node vine din `frontend/.node-version`. Funcția
 `BACKEND_URL`, deci browserul vorbește cu o singură origine, la fel ca prin proxy-ul Vite local.
 Pentru test local cu `wrangler pages dev`, cele două valori se pun în `frontend/.dev.vars`.
 
-**Serverul Go** rulează în Docker pe un server propriu, în spatele lui Caddy (certificat TLS
-automat). Fișierele sunt în [deploy/](deploy/). Caddy refuză orice cerere fără `PROXY_SECRET`,
-deci serverul Go e accesibil doar prin site, iar adresa jucătorului vine de la funcția Pages.
+**Serverul Go** rulează în Docker pe un server propriu, în spatele lui Caddy. Fișierele sunt în
+[deploy/](deploy/). Caddy refuză orice cerere fără `PROXY_SECRET`, deci serverul Go e accesibil
+doar prin site, iar adresa jucătorului vine de la funcția Pages.
+
+Domeniul API-ului stă în spatele proxy-ului Cloudflare (nor portocaliu), cu SSL/TLS pe modul
+**Full**. Certificatul public e al lui Cloudflare și se reînnoiește singur; între Cloudflare și
+server, Caddy folosește un certificat propriu, pe care și-l reînnoiește tot singur.
 
 Pe server, o singură dată:
 
 ```bash
-# Docker cu pluginul compose instalat; porturile 80 și 443 deschise; DNS: api.example.com -> IP
+# Docker cu pluginul compose instalat; porturile 80 și 443 deschise; DNS: api.example.com -> IP (proxied)
 sudo mkdir -p /opt/kickoff && sudo chown deploy: /opt/kickoff     # deploy = userul de SSH, în grupul docker
 nano /opt/kickoff/.env && chmod 600 /opt/kickoff/.env             # după modelul deploy/.env.example
 ```

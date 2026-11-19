@@ -1,8 +1,14 @@
-# TLS certificate for API_DOMAIN is obtained and renewed automatically.
+# API_DOMAIN sits behind the Cloudflare proxy (orange cloud), which holds the
+# public certificate and renews it. Caddy encrypts the Cloudflare-to-server hop
+# with a certificate from its own internal CA, renewed by Caddy itself, so
+# nothing is ever renewed by hand. Cloudflare SSL/TLS mode must be "Full".
+#
 # Only the Cloudflare Pages function knows PROXY_SECRET, so the Go server is
 # reachable through the site and nowhere else. That is what makes it safe to
 # trust the client address the function passes along.
 {$API_DOMAIN} {
+	tls internal
+
 	@site header X-Proxy-Secret {$PROXY_SECRET}
 
 	handle @site {
