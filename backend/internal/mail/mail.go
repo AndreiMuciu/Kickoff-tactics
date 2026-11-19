@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	netmail "net/mail"
 	"net/smtp"
 	"strings"
 	"time"
@@ -53,7 +54,21 @@ func (s SMTP) Send(m Message) error {
 		auth = smtp.PlainAuth("", s.User, s.Pass, s.Host)
 	}
 	to := clean(m.To)
+	header, sender := sender(s.From)
 	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n",
-		clean(s.From), to, clean(m.Subject), time.Now().UTC().Format(time.RFC1123Z), strings.ReplaceAll(m.Body, "\n", "\r\n"))
-	return smtp.SendMail(net.JoinHostPort(s.Host, s.Port), auth, s.From, []string{to}, []byte(msg))
+		header, to, clean(m.Subject), time.Now().UTC().Format(time.RFC1123Z), strings.ReplaceAll(m.Body, "\n", "\r\n"))
+	return smtp.SendMail(net.JoinHostPort(s.Host, s.Port), auth, sender, []string{to}, []byte(msg))
+}
+
+// sender splits MAIL_FROM into the From header and the bare address the mail
+// server wants as envelope sender. "Kickoff Tactics <no-reply@example.com>"
+// gives that header and "no-reply@example.com"; a server refuses the long form
+// as a sender.
+func sender(from string) (header, address string) {
+	from = clean(from)
+	a, err := netmail.ParseAddress(from)
+	if err != nil {
+		return from, from
+	}
+	return a.String(), a.Address
 }
