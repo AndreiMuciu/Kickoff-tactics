@@ -1,7 +1,10 @@
 # Kickoff Tactics
 
+[![CI](https://github.com/AndreiMuciu/Kickoff-tactics/actions/workflows/ci.yml/badge.svg)](https://github.com/AndreiMuciu/Kickoff-tactics/actions/workflows/ci.yml)
+
 Auto-battler de fotbal. Ești antrenor: cumperi jucători, îi așezi pe teren, ei joacă singuri,
-iar la pauză dai ordinul pentru repriza a doua. Demo local, un jucător contra echipe conduse de server.
+iar la pauză dai ordinul pentru repriza a doua. Sezon solo contra echipe conduse de server,
+serie live cu un prieten și lobby-uri de 8 manageri (normal, ranked, între prieteni).
 
 Designul și deciziile sunt în [DESIGN.md](DESIGN.md).
 
@@ -30,6 +33,67 @@ cp .env.example .env    # setează MONGODB_URI=mongodb://127.0.0.1:27017
 
 Pentru MongoDB Atlas pui în `.env` URI-ul `mongodb+srv://...` al clusterului. Codul e același;
 calea Atlas nu a fost încă rulată pe un cluster real.
+
+Fișierul `.env` stă în rădăcina proiectului, lângă `run.sh`, care îl încarcă la pornire. Este
+ignorat de git. Toate variabilele sunt descrise în [.env.example](.env.example).
+
+## Publicare
+
+Frontendul este static și merge pe Cloudflare Pages; serverul Go rulează separat, pe orice
+gazdă cu HTTPS.
+
+**Cloudflare Pages** (Workers & Pages > Create > Pages > Connect to Git):
+
+| Setare | Valoare |
+| --- | --- |
+| Root directory | `frontend` |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Variabilă `BACKEND_URL` | adresa serverului Go, de exemplu `https://api.example.com` |
+| Secret `PROXY_SECRET` | același șir ca în `.env`-ul de pe server |
+
+Versiunea de Node vine din `frontend/.node-version`. Funcția
+`frontend/functions/api/[[path]].js` trimite `/api/*` (inclusiv WebSocket-ul `/api/ws`) către
+`BACKEND_URL`, deci browserul vorbește cu o singură origine, la fel ca prin proxy-ul Vite local.
+Pentru test local cu `wrangler pages dev`, cele două valori se pun în `frontend/.dev.vars`.
+
+**Serverul Go** rulează în Docker pe un server propriu, în spatele lui Caddy (certificat TLS
+automat). Fișierele sunt în [deploy/](deploy/). Caddy refuză orice cerere fără `PROXY_SECRET`,
+deci serverul Go e accesibil doar prin site, iar adresa jucătorului vine de la funcția Pages.
+
+Pe server, o singură dată:
+
+```bash
+# Docker cu pluginul compose instalat; porturile 80 și 443 deschise; DNS: api.example.com -> IP
+sudo mkdir -p /opt/kickoff && sudo chown deploy: /opt/kickoff     # deploy = userul de SSH, în grupul docker
+nano /opt/kickoff/.env && chmod 600 /opt/kickoff/.env             # după modelul deploy/.env.example
+```
+
+**GitHub Actions**
+
+| Workflow | Când | Ce face |
+| --- | --- | --- |
+| `ci.yml` | orice push și pull request | format, vet, teste Go; typecheck și build frontend |
+| `build-and-push.yml` | push pe `main` care atinge `backend/` | teste, apoi imagine `linux/amd64` + `linux/arm64` pe Docker Hub (`<commit>` și `latest`) |
+| `deploy.yml` | după `build-and-push.yml` reușit, sau manual cu un tag | copiază `deploy/` pe server, `docker compose pull && up -d`, așteaptă `/healthz` |
+
+Setări în repo (Settings > Secrets and variables > Actions):
+
+| Nume | Tip | Valoare |
+| --- | --- | --- |
+| `DOCKERHUB_USERNAME` | variabilă | utilizatorul Docker Hub |
+| `DOCKERHUB_TOKEN` | secret | access token Docker Hub cu drept de scriere |
+| `SSH_HOST` | secret, mediul `production` | adresa serverului |
+| `SSH_USER` | secret, mediul `production` | userul de deploy |
+| `SSH_PRIVATE_KEY` | secret, mediul `production` | cheie privată folosită doar pentru deploy |
+| `SSH_KNOWN_HOSTS` | secret, mediul `production` | ieșirea comenzii `ssh-keyscan -t ed25519 <adresa>` |
+| `SSH_PORT` | variabilă, opțional | portul SSH dacă nu e 22 |
+
+O schimbare doar în `deploy/` se aplică rulând manual `deploy.yml`. Întoarcerea la o versiune
+mai veche: `deploy.yml` manual, cu sha-ul acelui commit ca tag.
+
+Stiva din `deploy/` a fost rulată local (poartă cu secret, `/healthz`, verificarea de origine).
+Publicarea pe Cloudflare Pages și pe server nu a fost încă rulată cap-coadă.
 
 ## Structură
 
@@ -77,8 +141,10 @@ Bugetul, magazinul, zarurile și rezultatul nu există în browser decât ca afi
 Antete pe răspunsurile API: `Content-Security-Policy: default-src 'none'`, `X-Frame-Options: DENY`,
 `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`, `Referrer-Policy: no-referrer`.
 
+Paginile frontend-ului primesc pe Cloudflare Pages antetele din `frontend/public/_headers`.
+
 De făcut înainte de orice expunere publică: HTTPS cu `COOKIE_SECURE=true`, CSP și pentru paginile
-frontend-ului, IP real din proxy de încredere pentru limitare, resetare de parolă și verificare de email.
+frontend-ului, un furnizor de email (SMTP) pentru confirmare și resetarea parolei.
 
 ## Teste
 
@@ -99,5 +165,6 @@ Pentru o lansare publică e nevoie de licențe pentru nume și imagine; vezi DES
 ## Cunoscut
 
 - `npm audit` raportează `picomatch` (ReDoS) adus de Vite. E unealtă de build, nu ajunge în browser.
-- Există conturi, pagină de start, prieteni, chat și serie live între doi prieteni (sezon nou de la zero pentru amândoi, stare ținută în baza de date, sincronizare pe ceasul serverului). Lipsesc WebSocket-ul (totul e prin interogare periodică), resetarea parolei, cartonașele și itemele. Vezi DESIGN.md.
+- Fără `SMTP_HOST`, mailurile de confirmare și de resetare a parolei apar doar în logul serverului.
+- Lipsesc itemele, autentificarea în doi pași și ștergerea contului. Vezi DESIGN.md.
 - `dev-test-users.txt` (ignorat de git) ține conturile de test locale create la verificare.

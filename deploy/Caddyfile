@@ -1,0 +1,19 @@
+# TLS certificate for API_DOMAIN is obtained and renewed automatically.
+# Only the Cloudflare Pages function knows PROXY_SECRET, so the Go server is
+# reachable through the site and nowhere else. That is what makes it safe to
+# trust the client address the function passes along.
+{$API_DOMAIN} {
+	@site header X-Proxy-Secret {$PROXY_SECRET}
+
+	handle @site {
+		reverse_proxy backend:8080 {
+			header_up X-Forwarded-For {http.request.header.X-Client-IP}
+			header_up -X-Proxy-Secret
+			header_up -X-Client-IP
+		}
+	}
+
+	handle {
+		respond 403
+	}
+}

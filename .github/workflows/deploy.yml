@@ -1,0 +1,89 @@
+name: Deploy
+
+# Puts an image that is already on Docker Hub onto the server: copies
+# deploy/compose.yml and deploy/Caddyfile to /opt/kickoff, pulls, restarts and
+# waits for /healthz. The server's own /opt/kickoff/.env is never touched.
+on:
+  workflow_run:
+    workflows: [Build and push]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag to deploy (a commit sha or "latest")
+        required: true
+        default: latest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      TAG: ${{ inputs.tag || github.event.workflow_run.head_sha }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ vars.SSH_PORT || '22' }}
+      DIR: /opt/kickoff
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Check the tag
+        run: |
+          case "$TAG" in
+            *[!A-Za-z0-9._-]*|"") echo "Invalid image tag."; exit 1 ;;
+          esac
+
+      - name: SSH key and host key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          {
+            echo "Host server"
+            echo "  HostName $SSH_HOST"
+            echo "  User $SSH_USER"
+            echo "  Port $SSH_PORT"
+            echo "  IdentityFile ~/.ssh/id_deploy"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+          } > ~/.ssh/config
+
+      - name: Copy the stack files
+        run: scp deploy/compose.yml deploy/Caddyfile "server:$DIR/"
+
+      - name: Pull and restart
+        run: |
+          ssh server "cd $DIR && test -f .env || { echo 'Missing $DIR/.env on the server.'; exit 1; }
+            export IMAGE_TAG=$TAG
+            docker compose pull --quiet &&
+            docker compose up -d --remove-orphans &&
+            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile &&
+            docker image prune -f >/dev/null"
+
+      - name: Wait for the server to answer
+        run: |
+          ssh server "cd $DIR && for i in \$(seq 1 30); do
+              docker compose exec -T caddy wget -qO- http://backend:8080/healthz && exit 0
+              sleep 2
+            done
+            docker compose ps; docker compose logs --tail 40 backend; exit 1"
+
+      - name: Remove the key
+        if: always()
+        run: rm -f ~/.ssh/id_deploy

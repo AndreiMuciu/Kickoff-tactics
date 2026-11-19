@@ -1,0 +1,44 @@
+# Production stack for one server. Lives in /opt/kickoff next to the Caddyfile
+# and a hand-written .env (see deploy/.env.example). The deploy workflow copies
+# this file and the Caddyfile there; it never touches .env.
+name: kickoff
+
+services:
+  backend:
+    image: ${IMAGE:?set IMAGE in .env}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ADDR: 0.0.0.0:8080
+      COOKIE_SECURE: "true"
+      # Safe only because Caddy below is the single way in and overwrites
+      # X-Forwarded-For itself.
+      TRUST_PROXY: "true"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 15s
+    logging:
+      options: { max-size: "10m", max-file: "5" }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [backend]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in .env}
+      PROXY_SECRET: ${PROXY_SECRET:?set PROXY_SECRET in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      options: { max-size: "10m", max-file: "5" }
+
+volumes:
+  caddy_data:
+  caddy_config:
