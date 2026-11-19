@@ -28,7 +28,7 @@ export default function Profile({ onClose, onChanged }: { onClose: () => void; o
       await load()
       onChanged()
     } catch (e) {
-      setMsg({ ok: false, text: e instanceof ApiError ? e.message : 'The game server is not responding.' })
+      setMsg({ ok: false, text: e instanceof ApiError ? e.message : "We can't reach the game right now. Try again in a moment." })
     } finally {
       setBusy(false)
     }

@@ -37,7 +37,7 @@ export default function Planner({ meta, plan, view, synergies, onClose }: Props)
     try {
       await savePlan(players)
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'The game server is not responding.')
+      setError(e instanceof ApiError ? e.message : "We can't reach the game right now. Try again in a moment.")
     } finally {
       setBusy(false)
     }

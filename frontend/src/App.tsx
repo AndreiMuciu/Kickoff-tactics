@@ -59,7 +59,7 @@ function CookieNotice() {
   return (
     <div className="cookie-bar" role="region" aria-label="Cookies">
       <span>
-        We use <b>one cookie</b>, to keep you signed in. Your browser also stores player photos and this notice locally. No advertising, no tracking, nothing shared. Player photos load from Wikimedia, which sees your IP address like any site you visit.
+        We use <b>one cookie</b>, to keep you signed in. No ads, no tracking. Player photos come from Wikimedia.
       </span>
       <button
         className="primary"
@@ -192,7 +192,10 @@ export default function App() {
     return (
       <div className="center">
         <h1>Kickoff Tactics</h1>
-        <p>The game server is not responding. Start the backend and reload.</p>
+        <p>We can't reach the game right now. Please try again in a moment.</p>
+        <button className="primary" onClick={() => location.reload()}>
+          Try again
+        </button>
       </div>
     )
   if (!meta || me === undefined)

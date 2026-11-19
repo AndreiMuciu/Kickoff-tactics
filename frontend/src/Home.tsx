@@ -69,7 +69,7 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
     return () => window.clearInterval(t)
   }, [searching])
 
-  const fail = useCallback((e: unknown) => notify(e instanceof ApiError ? e.message : 'The game server is not responding.'), [notify])
+  const fail = useCallback((e: unknown) => notify(e instanceof ApiError ? e.message : "We can't reach the game right now. Try again in a moment."), [notify])
   const refresh = useCallback(() => api.friends().then(setList).catch(() => {}), [])
 
   // Friends and the open conversation arrive over the live connection.
@@ -496,11 +496,11 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
         </div>
       )}
       <footer className="credits">
-        Unofficial fan prototype, not affiliated with any player, club or league. Player photos:{' '}
+        Unofficial fan game, not affiliated with any player, club or league. Player photos:{' '}
         <a href="https://commons.wikimedia.org/" target="_blank" rel="noreferrer noopener">
           Wikimedia Commons
-        </a>{' '}
-        via Wikipedia, free licences.
+        </a>
+        .
       </footer>
     </div>
   )

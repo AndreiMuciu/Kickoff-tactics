@@ -56,7 +56,7 @@ export default function Auth({ invitedBy, resetToken, onResetDone, onDone }: Pro
         onDone()
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'The game server is not responding.')
+      setError(err instanceof ApiError ? err.message : "We can't reach the game right now. Try again in a moment.")
     } finally {
       setBusy(false)
     }
@@ -108,7 +108,7 @@ export default function Auth({ invitedBy, resetToken, onResetDone, onDone }: Pro
             <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" minLength={8} maxLength={128} required />
           </label>
         )}
-        {mode === 'signup' && <small className="muted">At least 8 characters, stored only as a salted Argon2id hash. We mail you a link to confirm the address; it is used only for that and for password resets.</small>}
+        {mode === 'signup' && <small className="muted">At least 8 characters. We email you a link to confirm your address.</small>}
         {mode === 'forgot' && <small className="muted">Enter the address of your account and we mail you a link to choose a new password.</small>}
         {error && <p className="form-error">{error}</p>}
         {info && <p className="form-info">{info}</p>}

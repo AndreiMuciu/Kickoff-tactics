@@ -52,7 +52,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
   const [match, setMatch] = useState<MatchStage | null>(null)
 
   const fail = useCallback((e: unknown) => {
-    setToast(e instanceof ApiError ? e.message : 'The game server is not responding.')
+    setToast(e instanceof ApiError ? e.message : "We can't reach the game right now. Try again in a moment.")
     window.setTimeout(() => setToast(null), 3200)
   }, [])
 
@@ -214,9 +214,6 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
                   </button>
                 ))}
               </div>
-              <p className="muted fair">
-                Verifiable match: seed fingerprint, fixed before your choice: <code>{match.h1.run.commit?.slice(0, 24)}…</code>
-              </p>
             </div>
           )}
           {match.stage === 'h2' && (
@@ -233,15 +230,6 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
                 {match.h2.result.won ? 'The owner is smiling.' : `The owner's patience drops by ${match.h2.result.damage}.`}
                 {match.h2.result.income > 0 && ` Budget received: +${match.h2.result.income} 💰.`}
               </p>
-              <details className="fair">
-                <summary>Verifiable match</summary>
-                <p>
-                  Revealed seed: <code>{match.h2.result.seed}</code>
-                </p>
-                <p>
-                  SHA-256 promised before the match: <code>{match.h2.result.commit}</code>
-                </p>
-              </details>
               <button
                 className="primary"
                 onClick={() => {

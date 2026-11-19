@@ -120,7 +120,7 @@ export default function Series({ id, kind, meta, photos, onClose, notify }: Prop
       lastMove.current = Date.now()
       setView((v) => (v ? { ...v, my } : v))
     } catch (e) {
-      notify(e instanceof ApiError ? e.message : 'The game server is not responding.')
+      notify(e instanceof ApiError ? e.message : "We can't reach the game right now. Try again in a moment.")
     } finally {
       setBusy(false)
     }

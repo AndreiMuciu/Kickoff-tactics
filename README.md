@@ -125,7 +125,7 @@ Bugetul, magazinul, zarurile și rezultatul nu există în browser decât ca afi
 | --- | --- |
 | Client modificat (buget, jucători, rezultat) | Toată starea și toate regulile sunt pe server; răspunsul către client e o proiecție (`RunView`) fără seed și fără starea generatorului |
 | Ghicirea sau alegerea zarurilor | Seed din `crypto/rand`, ținut secret până la final |
-| Server care „aranjează” meciul după ordinul tău | Commit-reveal: SHA-256 al seed-ului e afișat înainte de alegere, seed-ul după meci; repriza întâi e prefix exact al meciului complet (test) |
+| Server care „aranjează” meciul după ordinul tău | Commit-reveal: SHA-256 al seed-ului e trimis clientului înainte de alegere, seed-ul după meci (interfața nu le mai afișează); repriza întâi e prefix exact al meciului complet (test) |
 | Furt de sesiune prin XSS | Token de 256 de biți în cookie `HttpOnly`, `SameSite=Strict`, `Path=/api`; în bază se ține doar hash-ul |
 | Parole | Argon2id (19 MiB, 2 treceri) cu sare aleatoare; maximum 4 hash-uri simultan; parola nu e logată și nu iese din server |
 | Ghicirea parolelor | Limită per IP și per cont; răspuns și timp identice pentru utilizator inexistent și parolă greșită |
