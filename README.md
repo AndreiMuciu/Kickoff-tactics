@@ -60,7 +60,7 @@ Pentru test local cu `wrangler pages dev`, cele două valori se pun în `fronten
 **Serverul Go** rulează în Docker pe un server propriu, în două copii (`backend-a`, `backend-b`)
 în spatele lui Caddy, care împarte cererile între ele și o ocolește pe cea oprită. Starea e în
 MongoDB, iar un Redis intern duce între cele două copii semnalul pentru WebSocket și limitele
-per cont. Fișierele sunt în [deploy/](deploy/). Caddy refuză orice cerere fără `PROXY_SECRET`,
+de cereri. Fișierele sunt în [deploy/](deploy/). Caddy refuză orice cerere fără `PROXY_SECRET`,
 deci serverul Go e accesibil doar prin site, iar adresa jucătorului vine de la funcția Pages.
 
 Domeniul API-ului stă în spatele proxy-ului Cloudflare (nor portocaliu), cu SSL/TLS pe modul
@@ -98,7 +98,8 @@ Setări în repo (Settings > Secrets and variables > Actions):
 O schimbare doar în `deploy/` se aplică rulând manual `deploy.yml`. Întoarcerea la o versiune
 mai veche: `deploy.yml` manual, cu sha-ul acelui commit ca tag.
 
-Limita de cereri per IP e ținută de fiecare copie separat; doar limitele per cont sunt comune.
+Toate limitele (cereri per IP, autentificare, mailuri, chat, invitații) sunt ținute în Redis, comune
+celor două copii. Dacă Redis nu răspunde, fiecare copie trece pe limita proprie, din memorie.
 
 ## Structură
 

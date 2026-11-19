@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"footy/internal/bus"
@@ -72,11 +73,14 @@ func New(st store.Store, cfg Config, log *slog.Logger) *Server {
 	}
 	s.hub = &hub{conns: map[string]map[*wsConn]bool{}}
 	s.cfg.Bus.Listen(s.hub.wakeLocal)
-	// Limits that guard accounts must hold across instances; the general
-	// per-IP flood limit stays local, it only protects this process.
+	// Every limit is common to all instances, so running more of them does
+	// not multiply what one address or one account may do.
+	s.general.share(s.cfg.Bus, "req")
 	s.authIP.share(s.cfg.Bus, "ip")
 	s.authAcc.share(s.cfg.Bus, "acc")
 	s.mailTo.share(s.cfg.Bus, "mail")
+	s.chat.share(s.cfg.Bus, "chat")
+	s.duel.share(s.cfg.Bus, "duel")
 	trustProxy = cfg.TrustProxy
 	for _, o := range cfg.AllowedOrigins {
 		s.origins[o] = true
@@ -499,7 +503,15 @@ type limiter struct {
 	// Set by share: the bucket then lives on the bus, common to all instances.
 	bus  bus.Bus
 	name string
+	// After a failed call the bus is left alone until this moment (unix
+	// nanoseconds), so an outage costs one short wait instead of one per request.
+	retryAt atomic.Int64
 }
+
+const (
+	sharedTimeout = 250 * time.Millisecond
+	sharedBackoff = 5 * time.Second
+)
 
 func (l *limiter) share(b bus.Bus, name string) { l.bus, l.name = b, name }
 
@@ -507,13 +519,17 @@ func (l *limiter) share(b bus.Bus, name string) { l.bus, l.name = b, name }
 // be reached; the caller then falls back to this instance's own bucket, so a
 // Redis outage weakens the limit to per-instance instead of removing it.
 func (l *limiter) shared(key string, cost float64) (allowed, ok bool) {
-	if l.bus == nil {
+	if l.bus == nil || time.Now().UnixNano() < l.retryAt.Load() {
 		return false, false
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), sharedTimeout)
 	defer cancel()
 	allowed, err := l.bus.Allow(ctx, l.name, key, l.rate, l.burst, cost)
-	return allowed, err == nil
+	if err != nil {
+		l.retryAt.Store(time.Now().Add(sharedBackoff).UnixNano())
+		return false, false
+	}
+	return allowed, true
 }
 
 func newLimiter(rate, burst float64) *limiter {
