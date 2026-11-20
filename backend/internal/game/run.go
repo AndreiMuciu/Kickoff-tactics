@@ -14,7 +14,7 @@ const (
 	MaxRounds     = 8
 	BenchSize     = 8
 	ShopSize      = 5
-	MaxLevel      = 7
+	MaxLevel      = 10 // ten outfield players and a keeper: a full eleven
 	RerollCost    = 2
 	BaseIncome    = 5  // budget received after every match
 	InterestStep  = 10 // every this much budget kept in the bank...
@@ -25,11 +25,11 @@ const (
 )
 
 // xpNeed[level] is the XP required to go from level to level+1.
-var xpNeed = [MaxLevel + 1]int{0, 2, 2, 4, 6, 8, 10, 0}
+var xpNeed = [MaxLevel + 1]int{0, 2, 2, 4, 6, 8, 10, 14, 18, 24, 0}
 
 // shopOdds[level] is the percentage chance per cost tier 1..5. Cost-5 legends
-// only appear from stadium level 5, and stay rare.
-var shopOdds = [MaxLevel + 1][5]int{{}, {100, 0, 0, 0, 0}, {80, 20, 0, 0, 0}, {60, 30, 10, 0, 0}, {45, 33, 20, 2, 0}, {30, 35, 28, 6, 1}, {20, 30, 35, 13, 2}, {12, 25, 35, 22, 6}}
+// only appear from stadium level 5, and stay rare until the last levels.
+var shopOdds = [MaxLevel + 1][5]int{{}, {100, 0, 0, 0, 0}, {80, 20, 0, 0, 0}, {60, 30, 10, 0, 0}, {45, 33, 20, 2, 0}, {30, 35, 28, 6, 1}, {20, 30, 35, 13, 2}, {12, 25, 35, 22, 6}, {8, 20, 33, 29, 10}, {5, 15, 30, 35, 15}, {3, 10, 25, 37, 25}}
 
 // ErrRule is returned for any intent the rules reject. Its message is safe to show.
 type ErrRule struct{ Msg string }
@@ -151,10 +151,10 @@ func (r *Run) withRNG(f func(g *RNG)) {
 }
 
 // Slots is the number of outfield players allowed: one per stadium level, plus
-// one with Squad Rotation. The keeper comes on top.
+// one with Squad Rotation, never more than ten. The keeper comes on top.
 func (r *Run) Slots() int {
 	if r.has("extraman") {
-		return r.Level + 1
+		return min(r.Level+1, MaxLevel)
 	}
 	return r.Level
 }

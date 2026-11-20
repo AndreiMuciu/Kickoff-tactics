@@ -211,3 +211,29 @@ func TestBanFollowsAMovedPlayer(t *testing.T) {
 		t.Fatal("a player moved during the match escaped his ban")
 	}
 }
+
+func TestStadiumReachesAFullEleven(t *testing.T) {
+	r, _ := NewRun("t")
+	r.gainXP(1000)
+	if r.Level != MaxLevel || MaxLevel != 10 || r.Slots() != 10 || r.XP != 0 {
+		t.Fatalf("level %d, slots %d, xp %d", r.Level, r.Slots(), r.XP)
+	}
+	// Squad Rotation adds a player, but never a twelfth man.
+	r.Augments = append(r.Augments, "extraman")
+	if r.Slots() != 10 {
+		t.Fatalf("extra man at the top level: %d slots", r.Slots())
+	}
+	r.Level = 9
+	if r.Slots() != 10 {
+		t.Fatalf("extra man at level 9: %d slots", r.Slots())
+	}
+	for lvl, odds := range shopOdds[1:] {
+		sum := 0
+		for _, p := range odds {
+			sum += p
+		}
+		if sum != 100 {
+			t.Fatalf("market odds at level %d add up to %d", lvl+1, sum)
+		}
+	}
+}

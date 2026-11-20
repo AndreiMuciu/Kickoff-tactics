@@ -65,8 +65,9 @@ Season of 8 fixtures against server-run clubs of rising strength.
 - **Budget**: 5 per fixture + interest (1 per 10 held when the match ends, max 5 at 50, as in TFT)
   + 1 for a win + streak bonus (+1 at 2 in a row, +2 at 4; wins or defeats). The transfer window
   shows the interest currently earned, how much more to bank for the next step, and the full rule.
-- **Stadium** (level 1-7): one outfield player per level, plus the keeper, and better players on the market.
-  2 free XP per fixture; 4 XP cost 4. XP per level: 2, 2, 4, 6, 8, 10.
+- **Stadium** (level 1-10): one outfield player per level, plus the keeper, and better players on the market.
+  Level 10 is a full eleven. 2 free XP per fixture; 4 XP cost 4. XP per level: 2, 2, 4, 6, 8, 10, 14, 18, 24.
+  Squad Rotation adds one outfield player, but never past ten.
 - **Opponents** field 1, 2, 3, 3, 4, 5, 6, 7 outfield players across the eight fixtures.
 - **Merge**: three identical players become one with an extra ★ (stats ×1.3, then ×1.65); three ★★
   make a ★★★. The market shows the stars you already own of a player and marks a card that would
@@ -156,7 +157,8 @@ only Drăgușin and Dennis Man at cost 1.
 
 Stats come from a position template scaled by cost (×0.76 at cost 1 up to ×1.08 at cost 5) plus a few
 personal tweaks. Market odds per stadium level (cost 1-5): L1 100/0/0/0/0, L2 80/20, L3 60/30/10,
-L4 45/33/20/2, L5 30/35/28/6/1, L6 20/30/35/13/2, L7 12/25/35/22/6. Legends appear only from level 5.
+L4 45/33/20/2, L5 30/35/28/6/1, L6 20/30/35/13/2, L7 12/25/35/22/6, L8 8/20/33/29/10,
+L9 5/15/30/35/15, L10 3/10/25/37/25. Legends appear only from level 5.
 
 **Combinations** (the left panel) come in two kinds, and a player counts for one of each. Nation
 combinations were tried and rejected by the author.

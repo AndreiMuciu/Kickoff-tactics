@@ -35,7 +35,7 @@ var Augments = func() []AugmentDef {
 		{ID: "scout", Name: "Scouting Network", Kind: "economy", Desc: "The first new-players refresh of every transfer window is free."},
 		{ID: "expansion", Name: "Stadium Expansion", Kind: "economy", Desc: "+8 stadium experience right now."},
 		{ID: "trusted", Name: "Trusted by the Board", Kind: "economy", Desc: "Defeats cost 30% less of the owner's patience."},
-		{ID: "extraman", Name: "Squad Rotation", Kind: "economy", Desc: "Field one more outfield player than your stadium level allows."},
+		{ID: "extraman", Name: "Squad Rotation", Kind: "economy", Desc: "Field one more outfield player than your stadium level allows (ten at most)."},
 		{ID: "fitness", Name: "Fitness Coach", Kind: "team", Desc: "Your players tire 25% more slowly.",
 			team: func(m *Mods) { m.Drain *= 0.75 }},
 		{ID: "crowd", Name: "Home Crowd", Kind: "team", Desc: "Every stat +4%.",

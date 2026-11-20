@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// A report of how matches look at every squad size the game allows (1 to 7
-// outfield players) plus a full eleven for reference.
+// A report of how matches look at every squad size the game allows (1 to 10
+// outfield players; 10 is a full eleven).
 // Run it with: REPORT=1 go test -run SquadSizes -v ./internal/game/
 func TestSquadSizes(t *testing.T) {
 	if os.Getenv("REPORT") == "" {
