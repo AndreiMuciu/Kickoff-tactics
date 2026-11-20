@@ -206,21 +206,6 @@ func eliminate(lb *store.Lobby, seat int) {
 	}
 }
 
-// closeIfOnlyBots ends a lobby that no human is playing any more: the bots
-// are placed by the patience they have left and nothing further is simulated.
-func closeIfOnlyBots(lb *store.Lobby) {
-	left := aliveSeats(lb)
-	for _, seat := range left {
-		if !lb.Seats[seat].Bot {
-			return
-		}
-	}
-	sort.SliceStable(left, func(a, b int) bool { return lb.Seats[left[a]].Patience < lb.Seats[left[b]].Patience })
-	for _, seat := range left {
-		eliminate(lb, seat)
-	}
-}
-
 // advanceLobby moves the lobby through any phase boundaries that have passed
 // and saves it once. Ranked points are written only after that save succeeds,
 // so a lost race cannot rate anybody twice.
@@ -358,7 +343,6 @@ func (s *Server) advanceLobby(ctx context.Context, lb *store.Lobby, now time.Tim
 			if left := aliveSeats(lb); len(left) == 1 {
 				eliminate(lb, left[0]) // the winner takes first place
 			}
-			closeIfOnlyBots(lb)
 			lb.Settled, changed = true, true
 			continue
 		case lb.Settled && !now.Before(c.roundEnd):
@@ -578,7 +562,11 @@ type rankedView struct {
 	Party   *partyView    `json:"party"`   // the friends lobby the manager is gathering in
 	Invites []partyInvite `json:"invites"` // friends lobbies the manager is invited to
 	LobbyID string        `json:"lobbyId"` // set when the manager sits in a live lobby
-	Top     []struct {
+	// WatchLobby is a lobby still being played that the manager is already out
+	// of: he can go back to watch it to the end. WatchPlace is where he finished.
+	WatchLobby string `json:"watchLobby"`
+	WatchPlace int    `json:"watchPlace"`
+	Top        []struct {
 		Name   string `json:"name"`
 		Rating int    `json:"rating"`
 		Tier   string `json:"tier"`
@@ -628,6 +616,10 @@ func (s *Server) rankedGet(w http.ResponseWriter, r *http.Request, uid string) {
 		}
 		if lb := s.playingLobby(r.Context(), uid); lb != nil {
 			v.LobbyID, v.Queued = lb.ID, false
+		} else if lb, err := s.st.ActiveLobby(r.Context(), uid); err == nil && lb.Status == "live" && now.Sub(lobbyClock(lb).roundEnd) < abandonedFor {
+			if seat := seatOf(lb, uid); seat >= 0 && !lb.Seats[seat].Alive {
+				v.WatchLobby, v.WatchPlace = lb.ID, lb.Seats[seat].Place
+			}
 		}
 	}
 	v.Tiers = tiers
@@ -915,7 +907,6 @@ func (s *Server) lobbyLeave(w http.ResponseWriter, r *http.Request, uid string) 
 			return
 		}
 		eliminate(lb, seat)
-		closeIfOnlyBots(lb)
 		// Mid-round the others still have a match to finish; otherwise check
 		// whether the lobby is already decided.
 		if len(aliveSeats(lb)) == 0 {
@@ -960,7 +951,8 @@ type standing struct {
 	Alive    bool   `json:"alive"`
 	Place    int    `json:"place"`
 	Patience int    `json:"patience"`
-	Facing   bool   `json:"facing"` // your opponent this round
+	Facing   bool   `json:"facing"`   // your opponent this round
+	Watchers int    `json:"watchers"` // managers spectating this one right now
 }
 
 type lobbyView struct {
@@ -979,6 +971,9 @@ type lobbyView struct {
 	// manager spectates somebody else; -1 when it is his own.
 	Watching int          `json:"watching"`
 	Watched  *watchedView `json:"watched,omitempty"`
+	// Spectators of the match shown, and of your own match.
+	Spectators []string `json:"spectators"`
+	WatchingMe []string `json:"watchingMe"`
 }
 
 // watchedView is what a spectator sees of another club, as in any auto-battler
@@ -1019,6 +1014,22 @@ func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
 		target, v.Watching = ws, ws
 	}
 
+	// Presence: who is spectating whom, shared by every instance.
+	specs := map[int][]string{}
+	if lb.Status == "live" {
+		w := -1
+		if target != seat {
+			w = target
+		}
+		s.cfg.Bus.Spectate(r.Context(), lb.ID, uid, lb.Seats[seat].Name, w)
+		specs = s.cfg.Bus.Spectators(r.Context(), lb.ID)
+		for _, names := range specs {
+			sort.Strings(names)
+		}
+	}
+	v.WatchingMe = append([]string{}, specs[seat]...)
+	v.Spectators = []string{}
+
 	c := lobbyClock(lb)
 	p, side := pairOf(lb, seat)
 	// While a shootout is still being watched, standings stay as they were.
@@ -1032,7 +1043,7 @@ func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
 	}
 	v.WarmupRounds = lobbyWarmup
 	for i, st := range lb.Seats {
-		row := standing{Seat: i, Name: st.Name, Bot: st.Bot, You: i == seat, Alive: st.Alive, Place: st.Place, Patience: st.Patience, Facing: i == facing}
+		row := standing{Seat: i, Name: st.Name, Bot: st.Bot, You: i == seat, Alive: st.Alive, Place: st.Place, Patience: st.Patience, Facing: i == facing, Watchers: len(specs[i])}
 		if hide {
 			if run, err := s.st.GetRun(r.Context(), lobbyRunKey(lb.ID, i)); err == nil {
 				if n := len(run.History); n > 0 && run.History[n-1].Round == lb.Round {
@@ -1091,6 +1102,11 @@ func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
 			v.Names[1], v.Opponent = p.NPC, p.NPC
 		}
 		v.Patience = [2]int{shown(p.A), shown(p.B)}
+		v.Spectators = append(v.Spectators, specs[p.A]...)
+		if p.B != p.A && !p.Ghost {
+			v.Spectators = append(v.Spectators, specs[p.B]...)
+		}
+		sort.Strings(v.Spectators)
 		if p.NPC != "" {
 			v.Patience[1] = game.VersusPatience // a small club has no owner to upset
 		}

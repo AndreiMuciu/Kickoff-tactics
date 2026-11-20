@@ -409,3 +409,10 @@ button.stand:hover { border-color: var(--line); background: var(--panel2); }
   .augment-cards { grid-template-columns: 1fr; }
   .market.compact .shop-cards { grid-template-columns: repeat(3, 1fr); }
 }
+
+.winner-line { font-size: 18px; }
+.winner-line b { color: var(--gold); }
+
+.watchers { color: var(--mine); }
+.spectated { color: var(--mine); font-size: 13px; margin: 0; }
+.watch-lobby { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 10px; border: 1px solid var(--mine); border-radius: 10px; background: rgba(56, 189, 248, .08); font-size: 13px; }

@@ -92,6 +92,7 @@ export default function App() {
   const [liveId, setLiveId] = useState<string | null>(null) // series being played
   const [ranked, setRanked] = useState<RankedView | null>(null)
   const [lobbyId, setLobbyId] = useState<string | null>(null) // ranked lobby being played
+  const [spectate, setSpectate] = useState(false) // opened only to watch a lobby you are out of
   const [resetToken, setResetToken] = useState<string | null>(mailLink?.kind === 'reset' ? mailLink.token : null)
 
   const notify = useCallback((msg: string) => {
@@ -234,11 +235,13 @@ export default function App() {
         <Series
           id={lobbyId}
           kind="lobby"
+          spectate={spectate}
           meta={meta}
           photos={photos}
           notify={notify}
           onClose={() => {
             setLobbyId(null)
+            setSpectate(false)
             setRanked(null)
             setView({ at: 'home' })
             void loadMe()
@@ -281,6 +284,10 @@ export default function App() {
               .then(setRanked)
               .catch((e) => notify(e instanceof ApiError ? e.message : 'Could not reach the lobby.'))
           }
+          onWatchLobby={(id) => {
+            setSpectate(true)
+            setLobbyId(id)
+          }}
           onRanked={(mode) =>
             (mode ? api.rankedJoin(mode) : api.rankedCancel())
               .then(() => api.ranked())

@@ -257,6 +257,8 @@ export interface SeriesView {
   tier?: string
   watching?: number // seat being spectated, -1 for your own match
   watched?: WatchedView
+  spectators?: string[] // watching the match shown
+  watchingMe?: string[] // watching your own match
 }
 export interface WatchedView {
   seat: number
@@ -277,6 +279,7 @@ export interface Standing {
   place: number
   patience: number
   facing: boolean
+  watchers?: number // managers spectating this one right now
 }
 export interface RankRow {
   rank: number
@@ -311,6 +314,8 @@ export interface RankedView {
   spread: number // ranked search: points either side accepted now, -1 for anyone
   tiers: Tier[]
   lobbyId: string
+  watchLobby?: string // a lobby still running that you are already out of
+  watchPlace?: number
   party: { id: string; host: string; isHost: boolean; members: string[]; invited: string[] } | null
   invites: { id: string; host: string }[] | null
   top: { name: string; rating: number; tier: string; games: number }[] | null

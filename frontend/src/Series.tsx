@@ -14,6 +14,7 @@ interface Props {
   photos: Photos
   onClose: () => void
   notify: (msg: string) => void
+  spectate?: boolean // opened from home only to watch a lobby you are out of
 }
 
 const emptyStats = () => ({ shots: 0, xg: 0, passes: 0, tackles: 0, poss: 0 })
@@ -25,7 +26,7 @@ const newMatch = (pens = false): MatchData => ({ half: pens ? 3 : 1, roster: [],
 // clock: the transfer window, the match and the break. This screen is sent the
 // state once a second, shows the phase the server reports and plays match frames at the
 // moment the server says they belong to, so both managers stay in step.
-export default function Series({ id, kind, meta, photos, onClose, notify }: Props) {
+export default function Series({ id, kind, meta, photos, onClose, notify, spectate }: Props) {
   const lobby = kind === 'lobby'
   // Both kinds of live game speak the same protocol on different routes.
   const net = lobby
@@ -40,7 +41,7 @@ export default function Series({ id, kind, meta, photos, onClose, notify }: Prop
   // Lobby: the seat whose match (and board) is being watched; -1 is your own.
   const [watching, setWatching] = useState(-1)
   // Out of the lobby but staying to watch the others.
-  const [stay, setStay] = useState(false)
+  const [stay, setStay] = useState(!!spectate)
   // Time of my last transfer move: a poll sent before it carries an older club
   // and must not overwrite the fresher answer (a sold player would reappear).
   const lastMove = useRef(0)
@@ -109,6 +110,15 @@ export default function Series({ id, kind, meta, photos, onClose, notify }: Prop
     // After the final whistle a shootout, if there is one, runs at the same pace.
     return Math.min(2 * per + Math.max(0, pen) - 0.01, 2 * per + ((e - 2 * half - brk) / half) * per)
   }
+
+  // Out and watching: follow a manager still in, the leader first, and move
+  // on when the one being watched goes out.
+  const outNow = lobby && !!view && view.status === 'live' && !view.alive && !!view.place
+  const watchedAlive = !!view?.standings?.find((st) => st.seat === watching)?.alive
+  const leader = view?.standings?.find((st) => st.alive && !st.you)?.seat
+  useEffect(() => {
+    if (outNow && stay && !watchedAlive && leader !== undefined) setWatching(leader)
+  }, [outNow, stay, watchedAlive, leader])
 
   if (!view || !view.my)
     return (
@@ -264,11 +274,18 @@ export default function Series({ id, kind, meta, photos, onClose, notify }: Prop
                     {st.name}
                     {st.you ? ' (you)' : ''}
                     {st.facing ? ' ⚔' : ''}
+                    {!!st.watchers && (
+                      <small className="watchers" title={`${st.watchers} manager${st.watchers > 1 ? 's are' : ' is'} watching`}>
+                        {' '}
+                        👁{st.watchers}
+                      </small>
+                    )}
                   </span>
                   <b>{st.alive ? st.patience : 'out'}</b>
                 </button>
               ))}
               <p className="muted">Click a manager to watch their board and their match. Click yourself to come back.</p>
+              {!!view.watchingMe?.length && <p className="spectated">👁 Watching you: {view.watchingMe.join(', ')}</p>}
               {view.penRound ? (
                 <p className="muted">
                   <b>Penalty round.</b> Your keeper and the best shooters on your pitch take on another manager: five kicks each, then sudden death. The winner gets +
@@ -312,7 +329,10 @@ export default function Series({ id, kind, meta, photos, onClose, notify }: Prop
           <div className="live-wrap">
             {lobby && (
               <div className="watch-bar">
-                <span className="muted">{spectating ? `👁 Watching ${view.names[0]} vs ${view.names[1]}` : view.penRound ? '🥅 Penalty round' : 'Your match'}</span>
+                <span className="muted">
+                  {spectating ? `👁 Watching ${view.names[0]} vs ${view.names[1]}` : view.penRound ? '🥅 Penalty round' : 'Your match'}
+                  {!!view.spectators?.length && <b className="spectated"> · 👁 spectators: {view.spectators.join(', ')}</b>}
+                </span>
                 <select value={view.watching ?? -1} onChange={(e) => setWatching(Number(e.target.value))}>
                   {view.alive && <option value={-1}>My match</option>}
                   {view.standings
@@ -421,6 +441,17 @@ export default function Series({ id, kind, meta, photos, onClose, notify }: Prop
               </p>
             ) : (
               <p className="muted">No points at stake in this lobby: your rating did not change.</p>
+            )}
+            {view.status === 'done' && view.place !== 1 && view.standings?.find((st) => st.place === 1) && (
+              <p className="winner-line">
+                🏆 Lobby winner: <b>{view.standings.find((st) => st.place === 1)!.name}</b>
+              </p>
+            )}
+            {view.status === 'live' && (
+              <p className="muted">
+                Still playing: {view.standings?.filter((st) => st.alive).map((st) => st.name).join(', ')}. Keep watching to see who wins; this
+                list updates when the lobby ends.
+              </p>
             )}
             <div className="final-stand">
               {view.standings?.map((st) => (

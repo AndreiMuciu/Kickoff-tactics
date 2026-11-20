@@ -13,10 +13,12 @@ type fakeBus struct {
 	err   error
 }
 
-func (f *fakeBus) Publish([]string)      {}
-func (f *fakeBus) Listen(func([]string)) {}
-func (f *fakeBus) Name() string          { return "fake" }
-func (f *fakeBus) Close() error          { return nil }
+func (f *fakeBus) Publish([]string)                                      {}
+func (f *fakeBus) Listen(func([]string))                                 {}
+func (f *fakeBus) Name() string                                          { return "fake" }
+func (f *fakeBus) Close() error                                          { return nil }
+func (f *fakeBus) Spectate(context.Context, string, string, string, int) {}
+func (f *fakeBus) Spectators(context.Context, string) map[int][]string   { return nil }
 func (f *fakeBus) Allow(_ context.Context, _, _ string, _, _, cost float64) (bool, error) {
 	f.calls++
 	if f.err != nil {

@@ -316,7 +316,12 @@ A manager waits in one queue or one friends lobby at a time.
 - **Spectating**: click a manager in the lobby list to see their board, combinations, augments,
   level and budget during the window, and their match while it is played (`/api/lobby?watch=seat`);
   a selector over the match switches between matches. A manager who is out can keep watching until
-  the lobby ends.
+  the lobby ends ("Keep watching", or later "Watch it to the end" on the home page; it then follows
+  the leader automatically). Spectators are visible: the lobby list shows 👁N next to a watched
+  manager, the match lists its spectators by name and a manager sees who is watching him. Presence
+  lives in the bus (Redis hash per lobby, 5 s freshness; in memory on a single instance). A lobby
+  whose humans are all out is no longer closed at once: the bots play on while anyone watches, and
+  the usual 3-minute abandonment closes it otherwise. The final screen names the winner.
 - You see this round's opponent only once the transfer window has closed.
 - **Bots** manage a real club with the same rules: they level the stadium when rich, sign pairs
   first, field their best eligible players and pick a half-time order from the score.

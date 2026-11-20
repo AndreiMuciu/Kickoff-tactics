@@ -8,7 +8,9 @@ package bus
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -24,15 +26,61 @@ type Bus interface {
 	Listen(fn func(userIDs []string))
 	// Allow is a token bucket shared by all instances. cost 0 only asks.
 	Allow(ctx context.Context, name, key string, rate, burst, cost float64) (bool, error)
+	// Spectate records that `viewer` (shown as `name`) is watching seat `seat`
+	// of a lobby right now; seat < 0 means he stopped.
+	Spectate(ctx context.Context, lobby, viewer, name string, seat int)
+	// Spectators lists who has watched each seat of a lobby in the last few seconds.
+	Spectators(ctx context.Context, lobby string) map[int][]string
 	Name() string
 	Close() error
 }
 
 // ---- one process ----
 
-type Local struct{ fn func([]string) }
+type Local struct {
+	fn   func([]string)
+	mu   sync.Mutex
+	spec map[string]map[string]spectator
+}
 
-func NewLocal() *Local { return &Local{} }
+func NewLocal() *Local { return &Local{spec: map[string]map[string]spectator{}} }
+
+// spectator is one viewer of a lobby: the seat he watches, as of when.
+type spectator struct {
+	seat int
+	name string
+	at   time.Time
+}
+
+// spectatorTTL is how long a viewer counts as watching after his last poll.
+const spectatorTTL = 5 * time.Second
+
+func (l *Local) Spectate(_ context.Context, lobby, viewer, name string, seat int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.spec[lobby] == nil {
+		l.spec[lobby] = map[string]spectator{}
+	}
+	if seat < 0 {
+		delete(l.spec[lobby], viewer)
+		return
+	}
+	l.spec[lobby][viewer] = spectator{seat, name, time.Now()}
+}
+
+func (l *Local) Spectators(_ context.Context, lobby string) map[int][]string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := map[int][]string{}
+	for id, sp := range l.spec[lobby] {
+		if time.Since(sp.at) > spectatorTTL {
+			delete(l.spec[lobby], id)
+			continue
+		}
+		out[sp.seat] = append(out[sp.seat], sp.name)
+	}
+	return out
+}
 
 func (l *Local) Name() string { return "in-process (single instance)" }
 func (l *Local) Close() error { return nil }
@@ -127,4 +175,45 @@ func (r *Redis) Allow(ctx context.Context, name, key string, rate, burst, cost f
 		return false, err
 	}
 	return n == 1, nil
+}
+
+func specKey(lobby string) string { return "footy:spec:" + lobby }
+
+// Spectate keeps one hash per lobby: viewer -> "seat|unix ms|name".
+func (r *Redis) Spectate(ctx context.Context, lobby, viewer, name string, seat int) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	if seat < 0 {
+		_ = r.c.HDel(ctx, specKey(lobby), viewer).Err()
+		return
+	}
+	v := strconv.Itoa(seat) + "|" + strconv.FormatInt(time.Now().UnixMilli(), 10) + "|" + name
+	pipe := r.c.TxPipeline()
+	pipe.HSet(ctx, specKey(lobby), viewer, v)
+	pipe.Expire(ctx, specKey(lobby), time.Hour)
+	_, _ = pipe.Exec(ctx)
+}
+
+func (r *Redis) Spectators(ctx context.Context, lobby string) map[int][]string {
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	out := map[int][]string{}
+	all, err := r.c.HGetAll(ctx, specKey(lobby)).Result()
+	if err != nil {
+		return out
+	}
+	now := time.Now().UnixMilli()
+	for _, v := range all {
+		parts := strings.SplitN(v, "|", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		seat, err1 := strconv.Atoi(parts[0])
+		at, err2 := strconv.ParseInt(parts[1], 10, 64)
+		if err1 != nil || err2 != nil || now-at > spectatorTTL.Milliseconds() {
+			continue
+		}
+		out[seat] = append(out[seat], parts[2])
+	}
+	return out
 }

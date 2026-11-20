@@ -14,12 +14,13 @@ interface Props {
   onParty: (f: () => Promise<unknown>) => void // runs a friends-lobby call, then refreshes
   onPlay: (fresh: boolean) => void
   onLive: (name: string) => void
+  onWatchLobby: (id: string) => void // go back to a lobby you are out of, to watch it end
   onLogout: () => void
   onProfileChanged: () => void
   notify: (msg: string) => void
 }
 
-export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, onLogout, onProfileChanged, notify }: Props) {
+export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, onWatchLobby, onLogout, onProfileChanged, notify }: Props) {
   const [profile, setProfile] = useState(false)
   const [list, setList] = useState<FriendList>({ friends: [], incoming: [], outgoing: [] })
   const [add, setAdd] = useState('')
@@ -182,7 +183,15 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
                   Divisions & points →
                 </button>
               </div>
-              <p className="muted">Eight managers, everyone starts from scratch with 100 owner's patience. The first two rounds are warm-ups against a small club, with nothing at stake. After that you are paired with another survivor every round and a defeat costs patience; the last one standing wins. Everyone starts at 0 points. Ranked moves them (never below 0): low divisions pay a lot for a good finish and take little for a bad one. It needs eight real managers and looks for opponents of your level first. Normal is the same game with nothing at stake; after a minute bots take the empty seats.</p>
+              <p className="muted">Eight managers, everyone starts from scratch with 100 owner's patience. The first two rounds are penalty shootouts between managers, with nothing at stake. After that you are paired with another survivor every round and a defeat costs patience, a little at first and more as the lobby goes on; the last one standing wins. Out early? You can stay and watch the others to the end. Everyone starts at 0 points. Ranked moves them (never below 0): low divisions pay a lot for a good finish and take little for a bad one. It needs eight real managers and looks for opponents of your level first. Normal is the same game with nothing at stake; after a minute bots take the empty seats.</p>
+              {ranked.watchLobby && (
+                <div className="watch-lobby">
+                  <span>
+                    Your last lobby is still being played{ranked.watchPlace ? ` (you finished #${ranked.watchPlace})` : ''}.
+                  </span>
+                  <button onClick={() => onWatchLobby(ranked.watchLobby!)}>👁 Watch it to the end</button>
+                </div>
+              )}
               {ranked.queued ? (
                 <div className="finding">
                   <div className="finding-head">
