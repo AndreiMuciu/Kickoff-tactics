@@ -156,9 +156,6 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
             {run.streak > 0 ? '🔥' : '🧊'} streak {Math.abs(run.streak)}
           </div>
         )}
-        <div className="chip budget">
-          💰 <b>{run.budget}</b>
-        </div>
         {shopPhase && (
           <button className="restart" disabled={busy} onClick={newRun} title="Abandon this season and start another">
             ↺ New season

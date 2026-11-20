@@ -304,11 +304,15 @@ A manager waits in one queue or one friends lobby at a time.
 - **Each round** the survivors are paired at random and each pair plays its own match; everybody
   watches their own match at the same moment. With an odd number the last manager plays a **ghost**:
   a copy of another survivor's squad, who is not affected by that result.
-- Losing costs patience: 3 × (2 + goal difference, counted up to 3) + 2 × n, where n counts match
-  rounds only: 11-17 in the first match round, 29-35 by the tenth. (It was 8 × (2 + goal difference
-  + n/3), which ended a lobby around round 10 with the first manager out by round 5-6; a simulation
-  of the new rule ends it around round 14, first out around round 8-9.) At zero the manager is out
-  and takes the next free finishing position; the last one in wins. Round 16 of matches is the cap.
+- Losing costs patience like TFT's damage: a stage base that climbs every three match rounds (2, 4,
+  7, 10, 13, then 17) plus the margin, counted up to four goals, times 1 + n/5 (n = match rounds
+  played, this one included). A 1-0 defeat costs 3 in the first match rounds, 9 around round 9,
+  17 around 15, 21 from 18; 3-0 costs 5, 13, 25, 29. Simulated: a lobby ends around match round
+  20 (p10 19, p90 22), first manager out around 13, fourth around 16. Earlier rules ended it around
+  round 10 (8 × (2 + goal difference + n/3)) and 12 (3 × (2 + margin) + 2n): he found both far too
+  quick. At zero the manager is out and takes the next free finishing position; the last one in
+  wins. Round 26 of matches is the cap. A friends series (10 rounds) now usually runs to the cap and
+  is decided on patience.
 - **Spectating**: click a manager in the lobby list to see their board, combinations, augments,
   level and budget during the window, and their match while it is played (`/api/lobby?watch=seat`);
   a selector over the match switches between matches. A manager who is out can keep watching until

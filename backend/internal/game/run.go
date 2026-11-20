@@ -809,12 +809,18 @@ const (
 	PenaltyPrize    = 2 // extra budget for winning a penalty round of a lobby
 )
 
-// VersusDamage is what a defeat costs in a live game. `stake` is how many
-// competitive rounds have been played, this one included, and the margin
-// counts up to three goals: early defeats are cheap, late ones expensive, so a
-// manager goes out gradually rather than after two bad results.
+// VersusDamage is what a defeat costs in a live game, shaped like TFT: a
+// stage base that climbs every three match rounds (2, 4, 7, 10, 13, then 17)
+// plus the margin (counted up to four goals), which weighs more as the lobby
+// goes on. `stake` is how many match rounds have been played, this one
+// included. Early defeats cost 3-6 of 100, late ones 20-30, so a lobby lasts
+// about twenty match rounds and nobody is out after two bad results.
 func VersusDamage(stake, margin int) int {
-	return 3*(2+min(max(margin, 1), 3)) + 2*stake
+	stage := 17
+	if stake <= 15 {
+		stage = [5]int{2, 4, 7, 10, 13}[(max(stake, 1)-1)/3]
+	}
+	return stage + min(max(margin, 1), 4)*(1+stake/5)
 }
 
 // SoloDamage is what a defeat costs in a solo season (patience 20).

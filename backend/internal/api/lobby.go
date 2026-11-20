@@ -22,7 +22,7 @@ const (
 	lobbySize      = 8
 	queueStale     = 15 * time.Second // a queued manager who stopped polling is dropped
 	lobbyWarmup    = 2                // penalty rounds, with no patience at stake, before the matches start
-	lobbyMaxRounds = 16 + lobbyWarmup
+	lobbyMaxRounds = 26 + lobbyWarmup
 	baseRating     = 0   // everyone starts from zero points
 	rankingLimit   = 100 // rows returned by a ranking, general or friends
 )

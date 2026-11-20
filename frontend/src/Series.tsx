@@ -204,9 +204,6 @@ export default function Series({ id, kind, meta, photos, onClose, notify }: Prop
             {patienceBar(1)}
           </>
         )}
-        <div className="chip budget">
-          💰 <b>{view.my.budget}</b>
-        </div>
         {view.status === 'live' && (
           <button className="restart" onClick={leave} title={lobby ? 'Give up: you finish last of those still in' : 'Give up: your friend wins the series'}>
             Forfeit

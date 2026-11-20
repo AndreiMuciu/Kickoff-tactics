@@ -153,19 +153,22 @@ func TestLockedMarketSurvivesOneWindow(t *testing.T) {
 
 func TestDefeatsCostGradually(t *testing.T) {
 	prev := 0
-	for stake := 1; stake <= 16; stake++ {
+	for stake := 1; stake <= 24; stake++ {
 		d := VersusDamage(stake, 1)
-		if d <= prev {
-			t.Fatalf("stake %d costs %d, not more than %d", stake, d, prev)
+		if d < prev {
+			t.Fatalf("stake %d costs %d, less than %d before", stake, d, prev)
 		}
 		prev = d
-		if VersusDamage(stake, 7) != VersusDamage(stake, 3) {
-			t.Fatal("margins beyond three goals must not cost more")
+		if VersusDamage(stake, 9) != VersusDamage(stake, 4) {
+			t.Fatal("margins beyond four goals must not cost more")
 		}
 	}
-	// Two early defeats must not end a lobby; the first rounds stay cheap.
-	if VersusDamage(1, 3)+VersusDamage(2, 3) >= VersusPatience/2 {
-		t.Fatalf("early defeats cost %d", VersusDamage(1, 3)+VersusDamage(2, 3))
+	// Early defeats are a scratch, late ones hurt.
+	if d := VersusDamage(1, 3); d > 6 {
+		t.Fatalf("a 3-0 defeat in the first match round costs %d", d)
+	}
+	if d := VersusDamage(18, 1); d < 18 {
+		t.Fatalf("a late defeat costs only %d", d)
 	}
 }
 
