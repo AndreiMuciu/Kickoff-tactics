@@ -290,6 +290,8 @@ func (s *Server) seriesInvite(w http.ResponseWriter, r *http.Request, uid string
 		s.fail(w, r, err)
 		return
 	}
+	// Challenging a friend ends the search for a lobby.
+	s.leaveQueues(r, uid, "")
 	writeJSON(w, 201, map[string]string{"id": sr.ID})
 }
 
@@ -327,6 +329,10 @@ func (s *Server) seriesRespond(w http.ResponseWriter, r *http.Request, uid strin
 	if err := s.st.SaveSeries(r.Context(), sr); err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	// Neither manager keeps searching for a lobby once the series is on.
+	for _, u := range [2]string{sr.A, sr.B} {
+		s.leaveQueues(r, u, "")
 	}
 	writeJSON(w, 200, map[string]string{"id": sr.ID})
 }

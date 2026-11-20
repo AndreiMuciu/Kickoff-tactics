@@ -296,7 +296,15 @@ export default function App() {
           }
           notify={notify}
           onProfileChanged={loadMe}
-          onPlay={(fresh) => setView({ at: 'game', fresh })}
+          onPlay={(fresh) => {
+            // A solo season ends the search for a lobby.
+            if (ranked?.queued)
+              api
+                .rankedCancel()
+                .then(() => notify('Lobby search cancelled: you are playing your season.'))
+                .catch(() => {})
+            setView({ at: 'game', fresh })
+          }}
           onLogout={async () => {
             await api.logout().catch(() => {})
             setMe(null)
