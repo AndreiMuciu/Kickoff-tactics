@@ -391,6 +391,13 @@ button.lock.on { border-color: var(--gold); background: rgba(253, 224, 71, .14);
 .augments-offer { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(192, 132, 252, .6); background: linear-gradient(135deg, rgba(168, 85, 247, .16), rgba(56, 189, 248, .08)); animation: fadein .4s; }
 .augments-offer p { margin: 0 0 8px; font-size: 13px; }
 .augment-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.augment-overlay { z-index: 30; }
+.augments-offer.dialog { width: min(760px, 100%); margin: 0; padding: 20px; background: linear-gradient(135deg, rgba(40, 24, 64, .97), rgba(12, 28, 44, .97)); box-shadow: 0 20px 60px -10px rgba(0, 0, 0, .7), 0 0 40px -10px rgba(192, 132, 252, .5); }
+.augments-offer.dialog h2 { margin: 0 0 4px; font-size: 22px; }
+.augments-offer.dialog > p { margin: 0 0 14px; font-size: 13px; }
+.augments-offer.dialog button.augment { padding: 16px; min-height: 120px; align-content: start; }
+.augments-offer.dialog button.augment b { font-size: 15px; }
+.augments-offer.dialog .augments-owned { margin: 12px 0 0; font-size: 12px; }
 button.augment { display: grid; gap: 4px; text-align: left; padding: 10px 12px; border-radius: 10px; background: var(--panel2); border: 1px solid #6b4fa0; }
 button.augment:hover:not(:disabled) { border-color: #d8b4fe; box-shadow: 0 0 18px -4px rgba(192, 132, 252, .7); }
 button.augment small { color: var(--muted); font-size: 12px; }

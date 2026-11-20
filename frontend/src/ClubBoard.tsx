@@ -322,7 +322,7 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
       </section>
 
       <section className="center-col">
-        <AugmentPicker meta={meta} offer={view.augmentOffer ?? []} canAct={canAct} busy={busy} onAction={onAction} />
+        {canAct && <AugmentPicker meta={meta} offer={view.augmentOffer ?? []} canAct={canAct} busy={busy} onAction={onAction} modal owned={view.augments} />}
         {plan && status && (
           <p className="plan-strip">
             <button onClick={() => setPlanning(true)}>📋 Team plan</button>

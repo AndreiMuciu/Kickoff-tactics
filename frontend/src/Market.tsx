@@ -113,15 +113,23 @@ export function augmentDefs(meta: Meta): Record<string, AugmentDef> {
 }
 
 // AugmentPicker offers three augments; one must be chosen before the window
-// closes, or the first is taken.
-export function AugmentPicker({ meta, offer, canAct, busy, onAction }: { meta: Meta; offer: string[]; canAct: boolean; busy: boolean; onAction: (a: Action) => void }) {
+// closes, or the first is taken. As a modal it covers the board until the
+// manager picks one, so the choice cannot be missed.
+export function AugmentPicker({ meta, offer, canAct, busy, onAction, modal, owned }: { meta: Meta; offer: string[]; canAct: boolean; busy: boolean; onAction: (a: Action) => void; modal?: boolean; owned?: string[] }) {
   const defs = augmentDefs(meta)
   if (offer.length === 0) return null
-  return (
-    <div className="augments-offer">
-      <p>
-        <b>✨ Choose an augment</b> <span className="muted">· it lasts the whole season. If you do not choose, the first one is taken when the window closes.</span>
-      </p>
+  const picker = (
+    <div className={`augments-offer ${modal ? 'dialog' : ''}`} role={modal ? 'dialog' : undefined} aria-modal={modal || undefined} aria-label="Choose an augment">
+      {modal ? (
+        <>
+          <h2>✨ Choose an augment</h2>
+          <p className="muted">It lasts the whole season. Pick one to continue; if the transfer window closes first, the first one is taken.</p>
+        </>
+      ) : (
+        <p>
+          <b>✨ Choose an augment</b> <span className="muted">· it lasts the whole season. If you do not choose, the first one is taken when the window closes.</span>
+        </p>
+      )}
       <div className="augment-cards">
         {offer.map((id, i) => {
           const a = defs[id]
@@ -135,8 +143,10 @@ export function AugmentPicker({ meta, offer, canAct, busy, onAction }: { meta: M
           )
         })}
       </div>
+      {modal && owned && owned.length > 0 && <p className="muted augments-owned">You already have: {owned.map((id) => defs[id]?.name ?? id).join(', ')}.</p>}
     </div>
   )
+  return modal ? <div className="overlay augment-overlay">{picker}</div> : picker
 }
 
 // AugmentList shows the augments a club already has.
