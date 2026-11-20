@@ -430,7 +430,9 @@ func (s *Server) saveLobby(ctx context.Context, lb *store.Lobby) error {
 		if run, err := s.st.GetRun(ctx, lobbyRunKey(lb.ID, i)); err == nil {
 			addMatches(d, run)
 		}
-		_ = s.st.AddStats(ctx, st.UserID, d)
+		if err := s.st.AddStats(ctx, st.UserID, d); err != nil {
+			s.log.Error("stats update failed", "err", err)
+		}
 	}
 	return nil
 }

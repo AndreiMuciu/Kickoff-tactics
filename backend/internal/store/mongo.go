@@ -184,6 +184,11 @@ func (m *Mongo) AddStats(ctx context.Context, uid string, delta map[string]int) 
 	if len(inc) == 0 {
 		return nil
 	}
+	// Accounts used to be created with `stats: null`, and $inc cannot add a
+	// field inside null: turn it into an empty document first.
+	if _, err := m.users.UpdateOne(ctx, bson.D{{Key: "_id", Value: uid}, {Key: "stats", Value: nil}}, bson.D{{Key: "$set", Value: bson.D{{Key: "stats", Value: bson.D{}}}}}); err != nil {
+		return err
+	}
 	_, err := m.users.UpdateOne(ctx, id(uid), bson.D{{Key: "$inc", Value: inc}})
 	return err
 }

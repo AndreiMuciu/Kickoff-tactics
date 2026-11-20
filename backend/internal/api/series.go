@@ -127,7 +127,9 @@ func (s *Server) finishSeries(ctx context.Context, sr *store.Series, note string
 		if run, err := s.st.GetRun(ctx, seriesRunKey(sr.ID, uid)); err == nil {
 			addMatches(d, run)
 		}
-		_ = s.st.AddStats(ctx, uid, d)
+		if err := s.st.AddStats(ctx, uid, d); err != nil {
+			s.log.Error("stats update failed", "err", err)
+		}
 	}
 }
 

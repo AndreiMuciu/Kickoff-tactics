@@ -477,7 +477,9 @@ func (s *Server) secondHalf(w http.ResponseWriter, r *http.Request, sid string) 
 				d["titles"] = 1
 			}
 		}
-		_ = s.st.AddStats(r.Context(), sid, d)
+		if err := s.st.AddStats(r.Context(), sid, d); err != nil {
+			s.log.Error("stats update failed", "err", err)
+		}
 	}
 	var events []game.Event
 	for _, e := range res.Events {

@@ -102,7 +102,7 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
-	u := &store.User{ID: id, Name: c.Username, NameKey: strings.ToLower(c.Username), PassHash: hash, CreatedAt: now, LastSeen: now, Email: email, EmailKey: emailKey}
+	u := &store.User{ID: id, Name: c.Username, NameKey: strings.ToLower(c.Username), PassHash: hash, CreatedAt: now, LastSeen: now, Email: email, EmailKey: emailKey, Stats: map[string]int{}}
 	if err := s.st.CreateUser(r.Context(), u); err != nil {
 		if errors.Is(err, store.ErrConflict) {
 			writeErr(w, http.StatusConflict, "That username is taken.")
