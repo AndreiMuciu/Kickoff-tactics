@@ -183,7 +183,7 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
                   Divisions & points →
                 </button>
               </div>
-              <p className="muted">Eight managers, everyone starts from scratch with 100 owner's patience. The first two rounds are penalty shootouts between managers, with nothing at stake. After that you are paired with another survivor every round and a defeat costs patience, a little at first and more as the lobby goes on; the last one standing wins. Out early? You can stay and watch the others to the end. Everyone starts at 0 points. Ranked moves them (never below 0): low divisions pay a lot for a good finish and take little for a bad one. It needs eight real managers and looks for opponents of your level first. Normal is the same game with nothing at stake; after a minute bots take the empty seats.</p>
+              <p className="muted">Eight managers, everyone starts from scratch with 100 owner's patience. The first two rounds are penalty shootouts between managers, with nothing at stake. After that you are paired with another survivor every round and a defeat costs patience, a little at first and more as the lobby goes on; the last one standing wins. Out early? You can stay and watch the others to the end. Everyone starts at 0 points. Ranked moves them (never below 0): low divisions pay a lot for a good finish and take little for a bad one. It looks for eight managers of your level first; after two minutes bots take the empty seats. Normal is the same game with nothing at stake; after a minute bots take the empty seats.</p>
               {ranked.watchLobby && (
                 <div className="watch-lobby">
                   <span>
@@ -209,8 +209,8 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
                     ))}
                   </div>
                   <small className="muted">
-                    {ranked.mode === 'ranked'
-                      ? `Ranked starts only with eight real managers, no bots. ${ranked.spread < 0 ? 'Now accepting opponents of any level.' : `Looking within ±${ranked.spread} points of you; the range widens the longer you wait.`}`
+                    {ranked.mode === 'ranked' && ranked.waitMs > 0
+                      ? `${ranked.spread < 0 ? 'Now accepting opponents of any level.' : `Looking within ±${ranked.spread} points of you; the range widens the longer you wait.`} Bots take the empty seats in ${Math.ceil(ranked.waitMs / 1000)}s.`
                       : ranked.waitMs > 0
                         ? `Still looking for people. Bots take the empty seats in ${Math.ceil(ranked.waitMs / 1000)}s.`
                         : 'Lobby is starting…'}

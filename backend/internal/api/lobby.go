@@ -31,9 +31,13 @@ const (
 var queueModes = []string{"ranked", "normal"}
 
 // queueWait is how long a normal queue keeps looking for people before bots
-// take the empty seats. A ranked lobby never has bots: it starts only when
-// eight real managers are waiting.
-var queueWait = 60 * time.Second
+// take the empty seats. rankedWait is the same for ranked: a group of eight
+// real managers of similar level starts at once, but nobody waits longer than
+// this; then whoever is queued plays, with bots in the empty seats.
+var (
+	queueWait  = 60 * time.Second
+	rankedWait = 2 * time.Minute
+)
 
 // A tier is a division of the ranking. Each has its own points table for
 // finishing 1st..8th: the lower the division, the more a good finish pays and
@@ -114,6 +118,33 @@ func pickRanked(entries []store.QueueEntry, now time.Time) []int {
 		return nil
 	}
 	return idx[best : best+lobbySize]
+}
+
+// fillRanked is the fallback once the longest-waiting ranked manager has waited
+// rankedWait: he plays with the queued managers closest to his points, up to
+// eight, and bots take the remaining seats. nil while nobody has waited that long.
+func fillRanked(entries []store.QueueEntry, now time.Time) []int {
+	first := -1
+	for i, e := range entries {
+		if first < 0 || e.JoinedAt.Before(entries[first].JoinedAt) {
+			first = i
+		}
+	}
+	if first < 0 || now.Sub(entries[first].JoinedAt) < rankedWait {
+		return nil
+	}
+	others := make([]int, 0, len(entries)-1)
+	for i := range entries {
+		if i != first {
+			others = append(others, i)
+		}
+	}
+	gap := func(i int) int {
+		d := entries[i].Rating - entries[first].Rating
+		return max(d, -d)
+	}
+	sort.SliceStable(others, func(a, b int) bool { return gap(others[a]) < gap(others[b]) })
+	return append([]int{first}, others[:min(len(others), lobbySize-1)]...)
 }
 
 var botNames = []string{"Bot Mourinho", "Bot Guardiola", "Bot Ancelotti", "Bot Klopp", "Bot Lucescu", "Bot Simeone", "Bot Bielsa", "Bot Iordănescu"}
@@ -475,8 +506,12 @@ func (s *Server) matchmake(ctx context.Context, q *store.Queue, uid string, now 
 	}
 	var picked, rest []store.QueueEntry
 	if ranked {
-		// Ranked: eight real managers of similar level, or keep waiting.
+		// Ranked: eight real managers of similar level; after rankedWait,
+		// whoever is there, with bots in the empty seats.
 		chosen := pickRanked(q.Entries, now)
+		if chosen == nil {
+			chosen = fillRanked(q.Entries, now)
+		}
 		if chosen == nil {
 			return true, s.st.SaveQueue(ctx, q)
 		}
@@ -555,7 +590,7 @@ type rankedView struct {
 	Queued  bool          `json:"queued"`
 	Mode    string        `json:"mode"` // the queue the manager waits in: ranked | normal
 	InQueue int           `json:"inQueue"`
-	WaitMs  int64         `json:"waitMs"`   // normal queue: how long until bots fill the lobby
+	WaitMs  int64         `json:"waitMs"`   // how long until bots fill the lobby
 	Waited  int64         `json:"waitedMs"` // how long this manager has been searching
 	Spread  int           `json:"spread"`   // ranked search: points either side accepted right now, -1 for anyone
 	Tiers   []tier        `json:"tiers"`
@@ -607,8 +642,17 @@ func (s *Server) rankedGet(w http.ResponseWriter, r *http.Request, uid string) {
 							}
 						}
 					}
-					if mode == "normal" && len(q.Entries) > 0 {
-						v.WaitMs = max(0, (queueWait - now.Sub(q.Entries[0].JoinedAt)).Milliseconds())
+					if len(q.Entries) > 0 {
+						wait, oldest := queueWait, q.Entries[0].JoinedAt
+						if mode == "ranked" {
+							wait = rankedWait
+							for _, e := range q.Entries {
+								if e.JoinedAt.Before(oldest) {
+									oldest = e.JoinedAt
+								}
+							}
+						}
+						v.WaitMs = max(0, (wait - now.Sub(oldest)).Milliseconds())
 					}
 				}
 				break

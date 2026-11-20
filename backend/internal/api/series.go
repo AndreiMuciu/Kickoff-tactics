@@ -41,7 +41,7 @@ func SetSpeed(x float64) {
 	if x <= 1 || x > 50 {
 		return
 	}
-	for _, d := range []*time.Duration{&shopFirst, &shopLater, &countdownDur, &breakDur, &resultDur, &lookahead, &tickDur, &halfDur, &orderFreezeAt, &queueWait} {
+	for _, d := range []*time.Duration{&shopFirst, &shopLater, &countdownDur, &breakDur, &resultDur, &lookahead, &tickDur, &halfDur, &orderFreezeAt, &queueWait, &rankedWait} {
 		*d = time.Duration(float64(*d) / x)
 	}
 }

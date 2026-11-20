@@ -280,10 +280,12 @@ an offline "friendly" between solo squads, and a one-off live match between solo
 The auto-battler format proper: up to eight managers in one lobby, on the same shared clock as a
 live series. The interface says "points", not "LP" (the author's wording). Three ways in:
 
-- **Ranked**: moves your rating. **Never has bots**: it starts only when eight real managers are
-  waiting, however long that takes. Matching is **by level**: a manager first accepts only groups
+- **Ranked**: moves your rating. Matching is **by level**: a manager first accepts only groups
   whose spread is within 100 points, 50 more every 10 seconds waited, anyone after 2 minutes. Of
-  the groups everyone in them accepts, the tightest starts; the rest keep waiting.
+  the groups everyone in them accepts, the tightest starts; the rest keep waiting. Once the
+  longest-waiting manager has waited **2 minutes**, he starts anyway with the queued managers
+  closest to his points (up to eight) and **bots take the empty seats**. Bots earn no points;
+  humans are rated on their finishing place as usual.
 - **Normal**: same game, nothing at stake. The queue looks for people for one minute, then bots take
   the empty seats.
 - **Friends lobby**: one manager creates it; **anyone already in it** can invite his own friends;
