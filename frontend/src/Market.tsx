@@ -115,15 +115,26 @@ export function augmentDefs(meta: Meta): Record<string, AugmentDef> {
 // AugmentPicker offers three augments; one must be chosen before the window
 // closes, or the first is taken. As a modal it covers the board until the
 // manager picks one, so the choice cannot be missed.
-export function AugmentPicker({ meta, offer, canAct, busy, onAction, modal, owned }: { meta: Meta; offer: string[]; canAct: boolean; busy: boolean; onAction: (a: Action) => void; modal?: boolean; owned?: string[] }) {
+export function AugmentPicker({ meta, offer, canAct, busy, onAction, modal, owned, secondsLeft }: { meta: Meta; offer: string[]; canAct: boolean; busy: boolean; onAction: (a: Action) => void; modal?: boolean; owned?: string[]; secondsLeft?: number }) {
   const defs = augmentDefs(meta)
   if (offer.length === 0) return null
   const picker = (
     <div className={`augments-offer ${modal ? 'dialog' : ''}`} role={modal ? 'dialog' : undefined} aria-modal={modal || undefined} aria-label="Choose an augment">
       {modal ? (
         <>
-          <h2>✨ Choose an augment</h2>
-          <p className="muted">It lasts the whole season. Pick one to continue; if the transfer window closes first, the first one is taken.</p>
+          <div className="augment-head">
+            <h2>✨ Choose an augment</h2>
+            {secondsLeft !== undefined && (
+              <span className={`augment-timer ${secondsLeft <= 10 ? 'urgent' : ''}`} title="Time left in the transfer window">
+                ⏱ {secondsLeft}s
+              </span>
+            )}
+          </div>
+          <p className="muted">
+            {secondsLeft !== undefined
+              ? `It lasts the whole season. If you have not chosen when the timer runs out, the first one is taken.`
+              : 'It lasts the whole season. Pick one to continue.'}
+          </p>
         </>
       ) : (
         <p>

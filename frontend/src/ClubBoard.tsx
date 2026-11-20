@@ -248,12 +248,13 @@ interface BoardProps {
   oppTitle: string
   primary?: React.ReactNode // main button or timer, right of the market actions
   side?: React.ReactNode // extra panel under the opponent's bonuses
+  windowLeft?: number // seconds left in a timed transfer window (live games only)
   oppAugments?: string[] // spectating: the watched club's augments
 }
 
 // ClubBoard is the management screen: pitch, bench and transfer market. It
 // only reports intents through onAction; the server decides what happens.
-export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, oppTitle, primary, side, oppAugments }: BoardProps) {
+export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, oppTitle, primary, side, oppAugments, windowLeft }: BoardProps) {
   const [selected, setSelected] = useState<string | null>(null)
   const [hover, setHover] = useState<{ def: string; stars: number } | null>(null)
   const [planning, setPlanning] = useState(false)
@@ -322,7 +323,7 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
       </section>
 
       <section className="center-col">
-        {canAct && <AugmentPicker meta={meta} offer={view.augmentOffer ?? []} canAct={canAct} busy={busy} onAction={onAction} modal owned={view.augments} />}
+        {canAct && <AugmentPicker meta={meta} offer={view.augmentOffer ?? []} canAct={canAct} busy={busy} onAction={onAction} modal owned={view.augments} secondsLeft={windowLeft} />}
         {plan && status && (
           <p className="plan-strip">
             <button onClick={() => setPlanning(true)}>📋 Team plan</button>

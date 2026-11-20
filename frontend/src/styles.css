@@ -393,7 +393,10 @@ button.lock.on { border-color: var(--gold); background: rgba(253, 224, 71, .14);
 .augment-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .augment-overlay { z-index: 30; }
 .augments-offer.dialog { width: min(760px, 100%); margin: 0; padding: 20px; background: linear-gradient(135deg, rgba(40, 24, 64, .97), rgba(12, 28, 44, .97)); box-shadow: 0 20px 60px -10px rgba(0, 0, 0, .7), 0 0 40px -10px rgba(192, 132, 252, .5); }
-.augments-offer.dialog h2 { margin: 0 0 4px; font-size: 22px; }
+.augments-offer.dialog h2 { margin: 0; font-size: 22px; }
+.augment-head { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 4px; }
+.augment-timer { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 18px; padding: 4px 12px; border-radius: 999px; background: rgba(250, 204, 21, .14); border: 1px solid rgba(250, 204, 21, .5); color: var(--gold); }
+.augment-timer.urgent { color: #fca5a5; background: rgba(239, 68, 68, .18); border-color: rgba(239, 68, 68, .7); animation: pulse 1s infinite; }
 .augments-offer.dialog > p { margin: 0 0 14px; font-size: 13px; }
 .augments-offer.dialog button.augment { padding: 16px; min-height: 120px; align-content: start; }
 .augments-offer.dialog button.augment b { font-size: 15px; }

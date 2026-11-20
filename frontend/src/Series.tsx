@@ -227,6 +227,7 @@ export default function Series({ id, kind, meta, photos, onClose, notify, specta
         view={spectating && view.watched ? { ...view.my, opponent: { name: view.watched.name, units: view.watched.units }, oppSynergies: view.watched.synergies } : view.my}
         oppAugments={spectating ? view.watched?.augments : undefined}
         canAct={view.phase === 'shop' && (!lobby || !!view.alive)}
+        windowLeft={view.phase === 'shop' ? left : undefined}
         busy={busy}
         onAction={act}
         oppTitle={
