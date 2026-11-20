@@ -21,8 +21,8 @@ import (
 const (
 	lobbySize      = 8
 	queueStale     = 15 * time.Second // a queued manager who stopped polling is dropped
-	lobbyWarmup    = 2                // rounds against a small club, with nothing at stake, before managers meet
-	lobbyMaxRounds = 14 + lobbyWarmup
+	lobbyWarmup    = 2                // penalty rounds, with no patience at stake, before the matches start
+	lobbyMaxRounds = 16 + lobbyWarmup
 	baseRating     = 0   // everyone starts from zero points
 	rankingLimit   = 100 // rows returned by a ranking, general or friends
 )
@@ -156,6 +156,20 @@ func pairOf(lb *store.Lobby, seat int) (*store.LobbyPair, int) {
 	return nil, 0
 }
 
+// lobbyClock lays out the lobby's current round; the first rounds are penalty rounds.
+func lobbyClock(lb *store.Lobby) roundClock {
+	return clockAt(lb.Round, lb.RoundStart, lb.PenTicks, lb.Round <= lobbyWarmup)
+}
+
+// playPair simulates one meeting of the round up to `halves` halves; a
+// penalty round is the shootout alone, whatever `halves` says.
+func playPair(lb *store.Lobby, p *store.LobbyPair, halves int) (*game.SimResult, error) {
+	if p.Shootout {
+		return game.SimulateShootout(p.Seed, p.Squads)
+	}
+	return game.SimulateSeed(p.Seed, p.Squads, effectiveOrders(lb, p), halves)
+}
+
 // effectiveOrders fills in the half-time order of bots and ghosts, which is a
 // pure function of the seed and the half-time score.
 func effectiveOrders(lb *store.Lobby, p *store.LobbyPair) [2]string {
@@ -216,7 +230,7 @@ func (s *Server) advanceLobby(ctx context.Context, lb *store.Lobby, now time.Tim
 	}
 	changed := false
 	for step := 0; step < 6; step++ {
-		c := clockAt(lb.Round, lb.RoundStart, lb.PenTicks)
+		c := lobbyClock(lb)
 		alive := aliveSeats(lb)
 		// Between rounds, one manager left (the others forfeited) means it is over.
 		if !lb.Frozen && finishIfDecided(lb) {
@@ -248,7 +262,7 @@ func (s *Server) advanceLobby(ctx context.Context, lb *store.Lobby, now time.Tim
 					run.BotManage(g)
 					dirty = true
 				}
-				if run.AutoField() {
+				if run.Deadline() {
 					dirty = true
 				}
 				if dirty {
@@ -264,21 +278,11 @@ func (s *Server) advanceLobby(ctx context.Context, lb *store.Lobby, now time.Tim
 				alive[i], alive[j] = alive[j], alive[i]
 			}
 			lb.Pairs = nil
-			// Warm-up: everyone plays a small club of the same strength, so the
-			// first signings can be tried out before patience is at stake.
-			for i := 0; lb.Round <= lobbyWarmup && i < len(alive); i++ {
-				club := game.WarmupClub(rngFromHex(seed), lb.Round)
-				p := store.LobbyPair{A: alive[i], B: alive[i], Ghost: true, NPC: club.Name, Orders: [2]string{"balanced", "balanced"}}
-				ps, pc, err := game.NewSeed()
-				if err != nil {
-					return err
-				}
-				p.Seed, p.Commit = ps, pc
-				p.Squads = [2]game.Lineup{squads[p.A], club}
-				lb.Pairs = append(lb.Pairs, p)
-			}
-			for i := 0; lb.Round > lobbyWarmup && i < len(alive); i += 2 {
-				p := store.LobbyPair{A: alive[i], Orders: [2]string{"balanced", "balanced"}}
+			// The first rounds are penalty rounds between the managers: the
+			// keeper and the best shooters on the pitch, five kicks each,
+			// a prize for the winner and no patience at stake.
+			for i := 0; i < len(alive); i += 2 {
+				p := store.LobbyPair{A: alive[i], Orders: [2]string{"balanced", "balanced"}, Shootout: lb.Round <= lobbyWarmup}
 				if i+1 < len(alive) {
 					p.B = alive[i+1]
 				} else {
@@ -298,11 +302,14 @@ func (s *Server) advanceLobby(ctx context.Context, lb *store.Lobby, now time.Tim
 			lb.PenTicks = 0
 			for i := range lb.Pairs {
 				p := &lb.Pairs[i]
-				res, err := game.SimulateSeed(p.Seed, p.Squads, effectiveOrders(lb, p), 2)
+				res, err := playPair(lb, p, 2)
 				if err != nil {
 					return err
 				}
 				p.PenTicks = max(0, len(res.Frames)-2*game.HalfTicks)
+				if p.Shootout {
+					p.PenTicks = len(res.Frames)
+				}
 				lb.PenTicks = max(lb.PenTicks, p.PenTicks)
 				sides := []int{0}
 				if !p.Ghost {
@@ -825,8 +832,10 @@ func (s *Server) lobbyAction(w http.ResponseWriter, r *http.Request, uid string)
 		writeErr(w, http.StatusNotFound, "You are not playing in that lobby.")
 		return
 	}
-	if lb.Frozen || !time.Now().Before(clockAt(lb.Round, lb.RoundStart, lb.PenTicks).shopEnd) {
-		writeErr(w, http.StatusConflict, "The transfer window is closed.")
+	// The market stays open during the match: the squads playing it are frozen
+	// in the pairings, so a signing counts from the next round on.
+	if !lb.Frozen && !time.Now().Before(lobbyClock(lb).shopEnd) {
+		writeErr(w, http.StatusConflict, "The squads are being sent in. Try again in a second.")
 		return
 	}
 	run, err := s.st.GetRun(r.Context(), lobbyRunKey(lb.ID, seat))
@@ -868,7 +877,7 @@ func (s *Server) lobbyOrder(w http.ResponseWriter, r *http.Request, uid string) 
 			writeErr(w, http.StatusNotFound, "No match in progress.")
 			return
 		}
-		c, now := clockAt(lb.Round, lb.RoundStart, lb.PenTicks), time.Now()
+		c, now := lobbyClock(lb), time.Now()
 		if now.Before(c.halfEnd) || !now.Before(c.h2Start.Add(-orderFreezeAt)) {
 			writeErr(w, http.StatusConflict, "Team talks are only possible during half-time.")
 			return
@@ -930,6 +939,7 @@ func (s *Server) lobbyLeave(w http.ResponseWriter, r *http.Request, uid string) 
 func lobbyBoard(lb *store.Lobby, run *game.Run, seat int) game.RunView {
 	v := run.View()
 	v.Round, v.MaxRounds, v.MaxPatience = lb.Round, lobbyMaxRounds, game.VersusPatience
+	v.LossCost = versusLossCost(run, lb.Round-lobbyWarmup)
 	// Scouting: this round's opponent once pairings exist, otherwise nobody yet.
 	if p, side := pairOf(lb, seat); p != nil {
 		opp := [2]int{p.B, p.A}[side]
@@ -943,6 +953,7 @@ func lobbyBoard(lb *store.Lobby, run *game.Run, seat int) game.RunView {
 }
 
 type standing struct {
+	Seat     int    `json:"seat"`
 	Name     string `json:"name"`
 	Bot      bool   `json:"bot"`
 	You      bool   `json:"you"`
@@ -964,6 +975,23 @@ type lobbyView struct {
 	LPChange     int        `json:"lpChange"`
 	Rating       int        `json:"rating"`
 	Tier         string     `json:"tier"`
+	// Watching is the seat whose match and board this answer shows when the
+	// manager spectates somebody else; -1 when it is his own.
+	Watching int          `json:"watching"`
+	Watched  *watchedView `json:"watched,omitempty"`
+}
+
+// watchedView is what a spectator sees of another club, as in any auto-battler
+// where the boards are public: its pitch, combinations, level and budget.
+type watchedView struct {
+	Seat      int                `json:"seat"`
+	Name      string             `json:"name"`
+	Level     int                `json:"level"`
+	Budget    int                `json:"budget"`
+	Patience  int                `json:"patience"`
+	Units     []game.Unit        `json:"units"`
+	Synergies []game.SynergyView `json:"synergies"`
+	Augments  []string           `json:"augments"`
 }
 
 func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
@@ -975,33 +1003,36 @@ func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
 	}
 	now := time.Now()
 	me := lb.Seats[seat]
-	v := lobbyView{Ranked: lb.Ranked, Alive: me.Alive, Place: me.Place, LPChange: me.LPChange}
+	v := lobbyView{Ranked: lb.Ranked, Alive: me.Alive, Place: me.Place, LPChange: me.LPChange, Watching: -1}
 	v.Status, v.ID = lb.Status, lb.ID
 	v.Frames, v.Events, v.Results = []game.Frame{}, []game.Event{}, []store.SeriesResult{}
 	v.ServerNow, v.HalfMs, v.BreakMs = now.UnixMilli(), halfDur.Milliseconds(), breakDur.Milliseconds()
 	v.Round, v.MaxRounds, v.MaxPatience = lb.Round, lobbyMaxRounds, game.VersusPatience
+	v.PenRound = lb.Round <= lobbyWarmup
 	if u, err := s.st.UserByID(r.Context(), uid); err == nil {
 		v.Rating, v.Tier = max(0, baseRating+u.LP), tierOf(max(0, baseRating+u.LP))
 	}
 
-	c := clockAt(lb.Round, lb.RoundStart, lb.PenTicks)
+	// Spectating: the match (and, during the window, the board) of another seat.
+	target := seat
+	if ws, err := strconv.Atoi(q.Get("watch")); err == nil && ws >= 0 && ws < len(lb.Seats) && ws != seat {
+		target, v.Watching = ws, ws
+	}
+
+	c := lobbyClock(lb)
 	p, side := pairOf(lb, seat)
 	// While a shootout is still being watched, standings stay as they were.
 	hide := lb.Status == "live" && lb.Settled && lb.PenTicks > 0 && now.Before(c.pensEnd)
 	facing := -1
 	if p != nil {
 		facing = [2]int{p.B, p.A}[side]
-		v.Role, v.Ghost = side, p.Ghost
-		v.Names = [2]string{lb.Seats[p.A].Name, lb.Seats[p.B].Name}
-		v.Opponent = lb.Seats[facing].Name
 		if p.NPC != "" {
-			facing, v.Ghost, v.Warmup = -1, false, true
-			v.Names[1], v.Opponent = p.NPC, p.NPC
+			facing = -1
 		}
 	}
 	v.WarmupRounds = lobbyWarmup
 	for i, st := range lb.Seats {
-		row := standing{Name: st.Name, Bot: st.Bot, You: i == seat, Alive: st.Alive, Place: st.Place, Patience: st.Patience, Facing: i == facing}
+		row := standing{Seat: i, Name: st.Name, Bot: st.Bot, You: i == seat, Alive: st.Alive, Place: st.Place, Patience: st.Patience, Facing: i == facing}
 		if hide {
 			if run, err := s.st.GetRun(r.Context(), lobbyRunKey(lb.ID, i)); err == nil {
 				if n := len(run.History); n > 0 && run.History[n-1].Round == lb.Round {
@@ -1025,29 +1056,53 @@ func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
 		}
 		return x.Place < y.Place
 	})
-	if p != nil {
-		v.Patience = [2]int{lb.Seats[p.A].Patience, lb.Seats[p.B].Patience}
-		if p.NPC != "" {
-			v.Patience[1] = game.VersusPatience // a small club has no owner to upset
-		}
-		if hide {
-			for _, row := range v.Standings {
-				if row.Name == v.Names[0] {
-					v.Patience[0] = row.Patience
-				}
-				if row.Name == v.Names[1] {
-					v.Patience[1] = row.Patience
-				}
+	shown := func(i int) int { // patience as the standings show it
+		for _, row := range v.Standings {
+			if row.Seat == i {
+				return row.Patience
 			}
 		}
+		return 0
 	}
 	if run, err := s.st.GetRun(r.Context(), lobbyRunKey(lb.ID, seat)); err == nil {
 		board := lobbyBoard(lb, run, seat)
 		v.My = &board
 	}
+	if target != seat {
+		if run, err := s.st.GetRun(r.Context(), lobbyRunKey(lb.ID, target)); err == nil {
+			lu, _ := run.Squad(lb.Seats[target].Name)
+			v.Watched = &watchedView{Seat: target, Name: lb.Seats[target].Name, Level: run.Level, Budget: run.Budget, Patience: shown(target),
+				Units: game.LineupUnits(lu), Synergies: lu.Synergies(), Augments: run.Augments}
+			if v.Watched.Augments == nil {
+				v.Watched.Augments = []string{}
+			}
+		}
+	}
+
+	// From here on, the match shown is the target's.
+	p, side = pairOf(lb, target)
+	if p != nil {
+		v.Role = side
+		v.Ghost = p.Ghost && target == seat
+		v.Names = [2]string{lb.Seats[p.A].Name, lb.Seats[p.B].Name}
+		v.Opponent = lb.Seats[[2]int{p.B, p.A}[side]].Name
+		if p.NPC != "" {
+			v.Ghost, v.Warmup = false, true
+			v.Names[1], v.Opponent = p.NPC, p.NPC
+		}
+		v.Patience = [2]int{shown(p.A), shown(p.B)}
+		if p.NPC != "" {
+			v.Patience[1] = game.VersusPatience // a small club has no owner to upset
+		}
+	}
 
 	v.KickoffAt = c.kickoff.UnixMilli()
 	released, halves := 0, 0
+	// A penalty round's frames are the kicks alone; a match's shootout follows its two halves.
+	pensFrom := 2 * game.HalfTicks
+	if v.PenRound {
+		pensFrom = 0
+	}
 	switch {
 	case lb.Status == "done":
 		v.Phase, v.PhaseEndsAt = "done", v.ServerNow
@@ -1065,7 +1120,7 @@ func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
 		released = min(2*game.HalfTicks, game.HalfTicks+int((now.Sub(c.h2Start)+lookahead)/tickDur))
 	case now.Before(c.pensEnd):
 		v.Phase, v.PhaseEndsAt, halves = "shootout", c.pensEnd.UnixMilli(), 2
-		released = 2*game.HalfTicks + int((now.Sub(c.matchEnd)+lookahead)/tickDur)
+		released = pensFrom + int((now.Sub(c.matchEnd)+lookahead)/tickDur)
 	default:
 		v.Phase, v.PhaseEndsAt, halves, released = "result", c.roundEnd.UnixMilli(), 2, 1<<30
 	}
@@ -1077,7 +1132,7 @@ func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
 		writeJSON(w, 200, v)
 		return
 	}
-	res, err := game.SimulateSeed(p.Seed, p.Squads, effectiveOrders(lb, p), halves)
+	res, err := playPair(lb, p, halves)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -1089,15 +1144,24 @@ func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
 	from = max(0, min(from, released))
 	v.From = from
 	v.Frames = res.Frames[from:released]
+	// Event ticks count from kick-off of a full match; a penalty round's
+	// frames start where that match would have ended.
+	base := 0
+	if p.Shootout {
+		base = 2 * game.HalfTicks
+	}
 	for _, ev := range res.Events {
-		if (ev.T > from || (from == 0 && ev.T == 0)) && ev.T <= released {
+		t := ev.T - base
+		if (t > from || (from == 0 && t == 0)) && t <= released {
 			v.Events = append(v.Events, ev)
 		}
 	}
-	if !now.Before(c.halfEnd) {
+	if !now.Before(c.halfEnd) && !p.Shootout {
 		hs := res.HalfScore
 		v.HalfScore = &hs
-		v.MyOrder = p.Orders[side]
+		if target == seat {
+			v.MyOrder = p.Orders[side]
+		}
 		if v.Phase == "halftime" {
 			st := res.Stats
 			v.Stats = &st

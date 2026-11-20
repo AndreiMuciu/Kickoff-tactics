@@ -43,7 +43,25 @@ taken as-is, so the design below is rethought. Items marked **[in demo]** exist 
 
 Season of 8 fixtures against server-run clubs of rising strength.
 
-- **Market**: 5 players on offer, refreshed free each fixture; a new set costs 2.
+- **Market**: 5 players on offer, refreshed free each fixture; a new set costs 2. **Lock** keeps the
+  current set for the next transfer window, once (as in TFT); a paid refresh unlocks it. The budget
+  is shown next to the market buttons.
+- **Market during the match**: the line-up that plays is frozen at kick-off, so buying, selling,
+  refreshing, locking and levelling stay open while the match is on and count from the next match.
+  Live games: a drawer under the pitch, open from kick-off to the next window. Solo: open during the
+  first half and the break only (after the break the season has already moved to the next fixture,
+  whose market and budget would give the result away). A player sent off is found where he played
+  or, if moved meanwhile, by name.
+- **Augments** (rounds 2, 5 and 8, every mode): choose one of three for the rest of the season; if
+  none is chosen when the window closes, the first is taken (bots always take the first). At most
+  one crest per offer. Economy: Transfer Windfall (+10 now), Shrewd Investor (interest up to +7),
+  Shirt Sponsor (+2 per match), Scouting Network (first refresh of each window free), Stadium
+  Expansion (+8 XP now), Trusted by the Board (defeats cost 30% less patience, at least 1), Squad
+  Rotation (one more outfield player). Team: Fitness Coach (drain -25%), Home Crowd (all stats +4%),
+  Finishing School (shooting +12%), Defensive Coach (opponent chances -10%), Penalty Specialist
+  (+10% to score penalties and shootout kicks). Crests: one per style, count as one more player of
+  that style. Team effects and crests travel in the frozen line-up (`Lineup.Augments`), so a replay
+  stays deterministic. Not balance-measured yet.
 - **Budget**: 5 per fixture + interest (1 per 10 held when the match ends, max 5 at 50, as in TFT)
   + 1 for a win + streak bonus (+1 at 2 in a row, +2 at 4; wins or defeats). The transfer window
   shows the interest currently earned, how much more to bank for the next step, and the full rule.
@@ -53,7 +71,8 @@ Season of 8 fixtures against server-run clubs of rising strength.
 - **Merge**: three identical players become one with an extra ★ (stats ×1.3, then ×1.65); three ★★
   make a ★★★. The market shows the stars you already own of a player and marks a card that would
   complete a merge.
-- **Owner's patience**: 20. A defeat costs 2 + goal difference + fixture/3. At zero you are sacked.
+- **Owner's patience**: 20. A defeat costs 1 + goal difference (counted up to 3) + fixture/3. At zero
+  you are sacked. The transfer window shows what the next defeat would cost.
 - **End**: 6+ wins champion, 4-5 European place, otherwise you survived.
 
 ## Goalkeeper [in demo]
@@ -277,15 +296,23 @@ A manager waits in one queue or one friends lobby at a time.
   (`frontend/src/quotes.ts`).
 - **Start**: everyone from scratch (budget 6, stadium level 1, academy keeper, patience 100, the
   scale TFT players know).
-- **Warm-up**: in the first 2 rounds nobody meets another manager. Everyone plays the same small
-  club (one, then two cheap players, as in the first fixtures of a solo season). Budget, experience,
-  streaks and suspensions count as usual; a defeat costs no patience. From round 3 managers are
-  paired with each other. The lobby lasts at most 2 + 14 rounds.
+- **Penalty rounds** (replaced the warm-up friendlies, 2026-11-20): the first 2 rounds are paired
+  like any other, but each meeting is a penalty shootout only: the keeper and the best shooters on
+  the pitch, five kicks each, then sudden death (`SimulateShootout`; the clock has no halves, the
+  shootout starts at kick-off). The winner gets +2 💰 on top of the usual income; nobody loses
+  patience. From round 3 full matches. The lobby lasts at most 2 + 16 rounds.
 - **Each round** the survivors are paired at random and each pair plays its own match; everybody
   watches their own match at the same moment. With an odd number the last manager plays a **ghost**:
   a copy of another survivor's squad, who is not affected by that result.
-- Losing costs patience: 8 × (2 + goal difference + n/3), where n counts competitive rounds only. At zero the manager is out and takes the
-  next free finishing position; the last one in wins. Round 14 is the cap.
+- Losing costs patience: 3 × (2 + goal difference, counted up to 3) + 2 × n, where n counts match
+  rounds only: 11-17 in the first match round, 29-35 by the tenth. (It was 8 × (2 + goal difference
+  + n/3), which ended a lobby around round 10 with the first manager out by round 5-6; a simulation
+  of the new rule ends it around round 14, first out around round 8-9.) At zero the manager is out
+  and takes the next free finishing position; the last one in wins. Round 16 of matches is the cap.
+- **Spectating**: click a manager in the lobby list to see their board, combinations, augments,
+  level and budget during the window, and their match while it is played (`/api/lobby?watch=seat`);
+  a selector over the match switches between matches. A manager who is out can keep watching until
+  the lobby ends.
 - You see this round's opponent only once the transfer window has closed.
 - **Bots** manage a real club with the same rules: they level the stadium when rich, sign pairs
   first, field their best eligible players and pick a half-time order from the score.
@@ -394,7 +421,7 @@ account (`plan`), so it is the same in a solo season, a live series and every lo
 ## Not built yet
 
 - Rating by opponent strength (points depend on place and own division only), seasons and resets,
-  spectating eliminated lobbies, a shared player pool, items or carousel rounds between matches.
+  a shared player pool, items or carousel rounds between matches, balance measurement of augments.
 - Sign-in by email, two-factor sign-in, account deletion, avatars.
 - Cards, items, substitutions at half-time, set pieces, 3D graphics.
 

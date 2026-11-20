@@ -159,7 +159,23 @@ func TestMatchFlowAndCommitment(t *testing.T) {
 	if v := r.View(); v.Commit == "" || v.Phase != "halftime" {
 		t.Fatalf("bad halftime view: %+v", v)
 	}
-	mustRule(t, r.Apply(Action{Type: "reroll"})) // no management during a match
+	// The market stays open during the match, but the line-up playing it is frozen.
+	frozen := len(r.Match.My.Units)
+	r.Budget += RerollCost
+	if err := r.Apply(Action{Type: "reroll"}); err != nil {
+		t.Fatalf("market closed during the match: %v", err)
+	}
+	for _, u := range r.Units {
+		if u.Line >= 0 && u.Line <= 2 {
+			if err := r.Apply(Action{Type: "move", UID: u.UID, Line: -1, Lane: r.freeBenchSlot()}); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+	}
+	if len(r.Match.My.Units) != frozen {
+		t.Fatal("a change during the match reached the frozen line-up")
+	}
 	if _, err := r.StartMatch(); err == nil {
 		t.Fatal("match restarted mid-game")
 	}

@@ -87,7 +87,7 @@ type gameView struct {
 	Frames   []json.RawMessage `json:"frames"`
 	Place    int               `json:"place"`
 	LPChange int               `json:"lpChange"`
-	Warmup   bool              `json:"warmup"`
+	PenRound bool              `json:"penRound"`
 	Standing []struct {
 		You      bool `json:"you"`
 		Patience int  `json:"patience"`
@@ -236,8 +236,10 @@ func main() {
 						r.patience[v.Round] = st.Patience
 					}
 				}
+				if v.Round > 0 {
+					r.warm[v.Round] = r.warm[v.Round] || v.PenRound
+				}
 				if len(v.Roster) > 0 {
-					r.warm[v.Round] = v.Warmup
 					r.commit[v.Round] = v.Commit
 					if v.From == frames {
 						for _, f := range v.Frames {
@@ -302,16 +304,16 @@ func main() {
 		gaps += r.gaps
 	}
 	sort.Ints(places)
-	// The first two rounds are warm-ups against a small club. These managers
-	// field a keeper only, so they lose them, and must not pay for it.
+	// The first two rounds are penalty rounds between the managers: half of
+	// them lose each one, and must not pay for it.
 	warm, kept, paid := true, true, false
 	for _, r := range results {
 		warm = warm && r.warm[1] && r.warm[2] && !r.warm[3]
 		kept = kept && r.patience[1] == 100 && r.patience[2] == 100 && r.patience[3] == 100
 		paid = paid || (r.patience[4] > 0 && r.patience[4] < 100)
 	}
-	check(warm, "rounds 1 and 2 are warm-ups for everyone, round 3 is not")
-	check(kept, "nobody lost patience in the warm-ups: all at 100 when round 3 begins")
+	check(warm, "rounds 1 and 2 are penalty rounds for everyone, round 3 is a match")
+	check(kept, "nobody lost patience in the penalty rounds: all at 100 when round 3 begins")
 	check(paid, "from round 3 a defeat costs patience")
 	check(fmt.Sprint(places) == "[1 2 3 4 5 6 7 8]", "both instances agree on the final places: %v", places)
 	check(gaps == 0, "no manager ever skipped match frames (%d gaps)", gaps)

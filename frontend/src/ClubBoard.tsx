@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Action, MatchData, Meta, PlayerDef, RunView, SynergyView, Unit } from './api'
 import { Face } from './Face'
+import { AugmentList, AugmentPicker, Market } from './Market'
 import { planStatus, usePlan } from './plan'
 import Planner from './Planner'
 import { shortName } from './photos'
@@ -20,12 +21,12 @@ const STAR_MUL = [0, 1, 1.3, 1.65]
 const LINE_NAMES = ['Defence', 'Midfield', 'Attack']
 // Income explains, during the transfer window, what the club is paid after the
 // match and what saving is worth right now.
-function Income({ budget, meta }: { budget: number; meta: Meta }) {
+function Income({ budget, meta, interestMax, lossCost }: { budget: number; meta: Meta; interestMax?: number; lossCost?: [number, number] }) {
   // A page left open across a server update still holds the older settings,
   // without these three: fall back to the rule's values rather than show NaN.
   const base = meta.baseIncome ?? 5
   const step = meta.interestStep ?? 10
-  const max = meta.interestMax ?? 5
+  const max = interestMax ?? meta.interestMax ?? 5
   const interest = Math.min(Math.floor(Math.max(budget, 0) / step), max)
   const cap = step * max
   const missing = (interest + 1) * step - budget
@@ -49,6 +50,12 @@ function Income({ budget, meta }: { budget: number; meta: Meta }) {
         <li>
           <b>Streak:</b> +1 after 2 results in a row, +2 after 4. Wins or defeats both count.
         </li>
+        {lossCost && lossCost[1] > 0 && (
+          <li>
+            <b>Next defeat:</b> costs {lossCost[0]} of the owner's patience when lost by one goal, up to {lossCost[1]} by three or more.
+            Defeats get more expensive as the season goes on.
+          </li>
+        )}
       </ul>
     </details>
   )
@@ -226,7 +233,10 @@ export function Shootout({ data }: { data: MatchData }) {
 
 // BoardView is what the board needs to draw a club: a season and a live
 // series both provide it.
-export type BoardView = Pick<RunView, 'budget' | 'level' | 'maxLevel' | 'xp' | 'xpNeed' | 'slots' | 'shop' | 'shopOdds' | 'units' | 'synergies' | 'opponent' | 'oppSynergies'>
+export type BoardView = Pick<
+  RunView,
+  'budget' | 'level' | 'maxLevel' | 'xp' | 'xpNeed' | 'slots' | 'shop' | 'shopOdds' | 'units' | 'synergies' | 'opponent' | 'oppSynergies' | 'locked' | 'rerollCost' | 'interestMax' | 'augments' | 'augmentOffer' | 'lossCost'
+>
 
 interface BoardProps {
   meta: Meta
@@ -238,11 +248,12 @@ interface BoardProps {
   oppTitle: string
   primary?: React.ReactNode // main button or timer, right of the market actions
   side?: React.ReactNode // extra panel under the opponent's bonuses
+  oppAugments?: string[] // spectating: the watched club's augments
 }
 
 // ClubBoard is the management screen: pitch, bench and transfer market. It
 // only reports intents through onAction; the server decides what happens.
-export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, oppTitle, primary, side }: BoardProps) {
+export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, oppTitle, primary, side, oppAugments }: BoardProps) {
   const [selected, setSelected] = useState<string | null>(null)
   const [hover, setHover] = useState<{ def: string; stars: number } | null>(null)
   const [planning, setPlanning] = useState(false)
@@ -306,10 +317,12 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
     <main className="layout">
       <section className="side">
         <SynergyList list={view.synergies} meta={meta} title="Your team" />
+        {(meta.augments?.length ?? 0) > 0 && <AugmentList meta={meta} list={view.augments} />}
         <PlayerSheet stars={shown?.stars ?? 1} def={shown ? defs[shown.def] : null} meta={meta} photo={shown ? photos[shown.def] : undefined} />
       </section>
 
       <section className="center-col">
+        <AugmentPicker meta={meta} offer={view.augmentOffer ?? []} canAct={canAct} busy={busy} onAction={onAction} />
         {plan && status && (
           <p className="plan-strip">
             <button onClick={() => setPlanning(true)}>📋 Team plan</button>
@@ -403,67 +416,19 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
         </div>
 
         <div className="shop">
-          <div className="shop-cards" onDragOver={(e) => canAct && e.preventDefault()} onDrop={dropSell}>
-            {view.shop.map((id, i) => {
-              const d = defs[id]
-              if (!d)
-                return (
-                  <div key={i} className="card empty">
-                    signed
-                  </div>
-                )
-              // What you already hold of this player, at any star level.
-              const mine = view.units.filter((u) => u.def === id)
-              const ones = mine.filter((u) => u.stars === 1).length
-              const twos = mine.filter((u) => u.stars === 2).length
-              const best = mine.reduce((m, u) => Math.max(m, u.stars), 0)
-              // Buying completes a merge when two 1★ copies are waiting; with two 2★
-              // on top of that, the same purchase chains straight into a 3★.
-              const merges = ones === 2 ? (twos === 2 ? 3 : 2) : 0
-              return (
-                <button
-                  key={i}
-                  title={[planned.has(id) ? 'In your team plan.' : '', merges ? `Buying him makes a ${'★'.repeat(merges)} player` : best ? `You own him at ${'★'.repeat(best)}` : ''].filter(Boolean).join(' ') || undefined}
-                  className={`card cost${d.cost} ${planned.has(id) ? 'planned' : ''} ${best > 0 ? 'owned' : ''} ${merges === 2 ? 'completes' : ''} ${merges === 3 ? 'completes three' : ''}`}
-                  disabled={!canAct || busy || view.budget < d.cost}
-                  onClick={() => onAction({ type: 'buy', slot: i, def: id })}
-                  onMouseEnter={() => setHover({ def: id, stars: 1 })}
-                >
-                  <Face def={d} photo={photos[id]} aspect={0.95} tight={2.3} />
-                  <span className="card-cost">{d.cost} 💰</span>
-                  {best > 0 && (
-                    <span className={`card-own ${merges ? 'up' : ''}`}>
-                      {'★'.repeat(merges || best)}
-                      {merges > 0 && ' ↑'}
-                    </span>
-                  )}
-                  <span className="card-body">
-                    <b>{d.name}</b>
-                    <span className="card-top">
-                      {ROLE[d.role].icon} {ROLE[d.role].label}
-                      {d.style && ` · ${meta.synergies.find((s) => s.id === d.style)?.name}`}
-                    </span>
-                    <span className="card-trait">{d.trait}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-          <div className="shop-actions">
-            <button disabled={!canAct || busy || view.budget < meta.rerollCost} onClick={() => onAction({ type: 'reroll' })}>
-              🔄 New players ({meta.rerollCost} 💰)
-            </button>
-            <button
-              disabled={!canAct || busy || view.level >= view.maxLevel || view.budget < meta.xpCost}
-              onClick={() => onAction({ type: 'levelup' })}
-              title="Each stadium level lets you field one more outfield player and brings better players to the market."
-            >
-              🏟 Stadium lvl {view.level}
-              {view.level < view.maxLevel ? ` · ${view.xp}/${view.xpNeed} (${meta.xpCost} 💰)` : ' · max'}
-            </button>
-            {primary}
-          </div>
-          <Income budget={view.budget} meta={meta} />
+          <Market
+            meta={meta}
+            photos={photos}
+            view={view}
+            canAct={canAct}
+            busy={busy}
+            onAction={onAction}
+            planned={planned}
+            onHover={(id) => setHover({ def: id, stars: 1 })}
+            onDropSell={dropSell}
+            primary={primary}
+          />
+          <Income budget={view.budget} meta={meta} interestMax={view.interestMax} lossCost={view.lossCost} />
           {planning && plan && (
             <Planner
               meta={meta}
@@ -479,6 +444,7 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
 
       <section className="side">
         <SynergyList list={view.oppSynergies} meta={meta} title={view.opponent.name || 'Opponent'} />
+        {oppAugments && <AugmentList meta={meta} list={oppAugments} title={`${view.opponent.name}'s augments`} />}
         {side}
       </section>
     </main>

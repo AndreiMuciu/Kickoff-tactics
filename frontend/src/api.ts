@@ -40,6 +40,16 @@ export interface Meta {
   interestMax: number
   xpCost: number
   storage: string
+  augments?: AugmentDef[]
+  augmentRounds?: number[]
+  penaltyPrize?: number
+  penaltyRounds?: number
+}
+export interface AugmentDef {
+  id: string
+  name: string
+  desc: string
+  kind: 'economy' | 'team' | 'crest'
 }
 export interface Unit {
   uid: string
@@ -95,6 +105,12 @@ export interface RunView {
   history: HistoryEntry[]
   result: string
   commit?: string
+  locked?: boolean
+  rerollCost?: number // what the next refresh costs (0 when it is free)
+  interestMax?: number
+  augments?: string[]
+  augmentOffer?: string[]
+  lossCost?: [number, number] // patience a defeat in the next match costs: by one goal, by three or more
 }
 export interface RosterEntry {
   idx: number
@@ -141,6 +157,8 @@ export type Action =
   | { type: 'move'; uid: string; line: number; lane: number }
   | { type: 'reroll' }
   | { type: 'levelup' }
+  | { type: 'lock' }
+  | { type: 'augment'; slot: number }
 
 export interface SeasonSummary {
   phase: 'shop' | 'halftime' | 'ended'
@@ -207,6 +225,7 @@ export interface SeriesView {
   halfMs: number
   breakMs: number
   penTicks: number
+  penRound?: boolean // the round is a penalty shootout and nothing else
   my?: RunView
   patience: [number, number]
   maxPatience: number
@@ -236,8 +255,21 @@ export interface SeriesView {
   lpChange?: number
   rating?: number
   tier?: string
+  watching?: number // seat being spectated, -1 for your own match
+  watched?: WatchedView
+}
+export interface WatchedView {
+  seat: number
+  name: string
+  level: number
+  budget: number
+  patience: number
+  units: Unit[]
+  synergies: SynergyView[]
+  augments: string[]
 }
 export interface Standing {
+  seat: number
   name: string
   bot: boolean
   you: boolean

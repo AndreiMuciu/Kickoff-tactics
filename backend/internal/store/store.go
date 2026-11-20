@@ -133,7 +133,8 @@ type LobbySeat struct {
 type LobbyPair struct {
 	A, B     int // seat indexes; A is team 0
 	Ghost    bool
-	NPC      string // warm-up round: the name of the small club A plays instead of a manager
+	NPC      string // older lobbies' warm-up round: the name of the small club A played instead of a manager
+	Shootout bool   // a penalty round: the meeting is settled by penalties alone
 	Seed     string
 	Commit   string
 	Squads   [2]game.Lineup

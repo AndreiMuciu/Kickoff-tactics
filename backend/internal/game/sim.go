@@ -21,9 +21,10 @@ type LineupUnit struct {
 }
 
 type Lineup struct {
-	Name  string
-	GK    LineupUnit // only DefID and Stars are used
-	Units []LineupUnit
+	Name     string
+	GK       LineupUnit // only DefID and Stars are used
+	Units    []LineupUnit
+	Augments []string `bson:",omitempty"` // the club's augments: crests and match effects count
 }
 
 // Frame is [ballX, ballY, owner, then x, y, flags per player]; coordinates x10.
@@ -172,6 +173,8 @@ type sim struct {
 	penTaker int
 	// fkTaker is the player about to strike a direct free kick, or -1.
 	fkTaker int
+	// kicks each side takes in a shootout before sudden death.
+	kicks int
 }
 
 func adv(team int, x float64) float64 {
@@ -200,7 +203,36 @@ func Simulate(seed uint64, lineups [2]Lineup, tactics [2][2]string, halves int) 
 // leave out: the balance reports use it to measure what a combination is
 // worth with the very same players on the pitch.
 func simulate(seed uint64, lineups [2]Lineup, tactics [2][2]string, halves int, without [2]string) *SimResult {
-	s := &sim{rng: NewRNG(seed), owner: -1, penTaker: -1, fkTaker: -1, res: &SimResult{}}
+	s := newSim(seed, lineups, without)
+	s.play(tactics, halves)
+	return s.res
+}
+
+// SimulateShootout settles a meeting with penalties alone, five kicks each and
+// then sudden death: the penalty rounds at the start of a lobby. Its frames
+// are only the kicks; tick numbers continue from where a full match would
+// end, so events read like those of a shootout after 90 minutes.
+func SimulateShootout(seedHex string, lineups [2]Lineup) (*SimResult, error) {
+	seed, err := seedFromHex(seedHex)
+	if err != nil {
+		return nil, err
+	}
+	s := newSim(seed, lineups, [2]string{})
+	for t := 0; t < 2; t++ {
+		s.tac[t] = TacticByID["balanced"]
+	}
+	s.tick = 2 * HalfTicks
+	s.kicks = cupKicks
+	s.shootout()
+	s.res.Score = s.score
+	return s.res, nil
+}
+
+// cupKicks is the length of a penalty round's shootout before sudden death.
+const cupKicks = 5
+
+func newSim(seed uint64, lineups [2]Lineup, without [2]string) *sim {
+	s := &sim{rng: NewRNG(seed), owner: -1, penTaker: -1, fkTaker: -1, res: &SimResult{}, kicks: shootoutKicks}
 	for t := 0; t < 2; t++ {
 		lu := lineups[t]
 		s.mods[t], _ = computeSynergies(lu, without[t])
@@ -247,6 +279,10 @@ func simulate(seed uint64, lineups [2]Lineup, tactics [2][2]string, halves int, 
 			s.mods[t].Drain *= or1(p.fx.teamDrain)
 		}
 	}
+	return s
+}
+
+func (s *sim) play(tactics [2][2]string, halves int) {
 	for h := 0; h < halves && h < 2; h++ {
 		s.half = h
 		for t := 0; t < 2; t++ {
@@ -285,7 +321,6 @@ func simulate(seed uint64, lineups [2]Lineup, tactics [2][2]string, halves int, 
 			s.shootout()
 		}
 	}
-	return s.res
 }
 
 func (s *sim) event(typ string, team, p, q int, xg float64) {
@@ -1322,11 +1357,11 @@ func (s *sim) shootout() {
 		hold(7)
 	}
 	s.event("shootout", 0, -1, -1, 0)
-	for n := 0; n < shootoutKicks; n++ {
+	for n := 0; n < s.kicks; n++ {
 		kick(0, n)
 		kick(1, n)
 	}
-	for n := shootoutKicks; pens[0] == pens[1] && n < 30; n++ {
+	for n := s.kicks; pens[0] == pens[1] && n < 30; n++ {
 		kick(0, n)
 		kick(1, n)
 	}

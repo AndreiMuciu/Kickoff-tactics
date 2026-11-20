@@ -10,6 +10,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     // ws: the WebSocket at /api/ws goes through the same proxy.
-    proxy: { '/api': { target: 'http://127.0.0.1:8080', changeOrigin: false, ws: true } },
+    // API_TARGET points a second dev server at a test backend (e.g. one run with GAME_SPEED).
+    proxy: { '/api': { target: process.env.API_TARGET ?? 'http://127.0.0.1:8080', changeOrigin: false, ws: true } },
   },
 })

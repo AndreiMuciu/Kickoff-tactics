@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from './api'
 import type { Action, HalfData, Meta, RunView } from './api'
 import ClubBoard, { Shootout, StatsTable } from './ClubBoard'
+import { MatchMarket } from './Market'
 import MatchView from './MatchView'
 import type { Photos } from './photos'
 
@@ -198,6 +199,22 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
       {match && (
         <div className="overlay">
           {match.stage === 'h1' && <MatchView key="h1" data={match.h1} meta={meta} photos={photos} startScore={[0, 0]} onDone={() => setMatch({ stage: 'halftime', h1: match.h1 })} />}
+          {/* The market stays open in the first half and at the break. After the
+              break the season has already moved on to the next round, whose
+              market and budget would give the result away. */}
+          {(match.stage === 'h1' || match.stage === 'halftime') && (
+            <div className="solo-market">
+              <MatchMarket
+                meta={meta}
+                photos={photos}
+                view={run}
+                canAct={!busy}
+                busy={busy}
+                onAction={act}
+                note="Signings made now play from the next match. The market closes when the second half starts and reopens after the final whistle."
+              />
+            </div>
+          )}
           {match.stage === 'halftime' && (
             <div className="dialog">
               <h2>
@@ -235,6 +252,9 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
                 onClick={() => {
                   setRun(match.h2.run)
                   setMatch(null)
+                  // The result carries the club as the match ended; read it again
+                  // in case anything changes server-side meanwhile.
+                  api.run().then(setRun).catch(() => {})
                 }}
               >
                 Continue

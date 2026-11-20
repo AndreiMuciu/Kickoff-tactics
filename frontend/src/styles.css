@@ -367,3 +367,45 @@ button.link:hover:not(:disabled) { background: none; text-decoration: underline;
 .notfound { font-size: 96px; font-weight: 900; line-height: 1; color: var(--gold); margin: 8px 0; }
 a.button { display: inline-block; text-decoration: none; border-radius: 10px; padding: 10px 22px; font-weight: 800; background: #b6f23c; color: #0c1a08; border: 1px solid #d3ff73; }
 a.button:hover { background: #c8fa5a; }
+
+/* ---- market: budget next to the shop, lock, compact market under a live match ---- */
+.market { display: grid; gap: 10px; }
+.shop-actions { flex-wrap: wrap; align-items: center; }
+.wallet { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; background: rgba(253, 224, 71, .1); border: 1px solid rgba(253, 224, 71, .45); font-size: 15px; }
+.wallet b { color: var(--gold); font-size: 20px; }
+button.lock.on { border-color: var(--gold); background: rgba(253, 224, 71, .14); color: var(--gold); }
+.market.compact .card, .market.compact .card.empty { height: 118px; }
+.market.compact .card b { font-size: 13px; }
+.market.compact .card-body { padding: 6px 8px; }
+.market.compact .shop-actions button { padding: 6px 10px; font-size: 13px; }
+.market.compact .wallet b { font-size: 17px; }
+.bench-count { font-size: 12px; }
+.match-market { margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.match-market-toggle { width: 100%; background: none; border: none; text-align: left; padding: 10px 14px; font-weight: 600; }
+.match-market-toggle b { color: var(--gold); }
+.match-market-body { display: grid; gap: 8px; padding: 0 12px 12px; }
+.match-market-body > p { margin: 0; font-size: 12px; }
+.solo-market { width: min(1280px, 100%); }
+
+/* ---- augments ---- */
+.augments-offer { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(192, 132, 252, .6); background: linear-gradient(135deg, rgba(168, 85, 247, .16), rgba(56, 189, 248, .08)); animation: fadein .4s; }
+.augments-offer p { margin: 0 0 8px; font-size: 13px; }
+.augment-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+button.augment { display: grid; gap: 4px; text-align: left; padding: 10px 12px; border-radius: 10px; background: var(--panel2); border: 1px solid #6b4fa0; }
+button.augment:hover:not(:disabled) { border-color: #d8b4fe; box-shadow: 0 0 18px -4px rgba(192, 132, 252, .7); }
+button.augment small { color: var(--muted); font-size: 12px; }
+button.augment.crest { border-color: #a16207; }
+button.augment.economy b { color: var(--gold); }
+button.augment.team b { color: #86efac; }
+
+/* ---- lobby: clickable standings, spectating ---- */
+button.stand { width: 100%; background: none; border: 1px solid transparent; text-align: left; color: inherit; }
+button.stand:hover { border-color: var(--line); background: var(--panel2); }
+.stand.watched { border-color: var(--mine); }
+.watch-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+.watch-bar select { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font: inherit; }
+
+@media (max-width: 720px) {
+  .augment-cards { grid-template-columns: 1fr; }
+  .market.compact .shop-cards { grid-template-columns: repeat(3, 1fr); }
+}

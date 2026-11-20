@@ -397,6 +397,11 @@ func computeSynergies(lu Lineup, without string) (Mods, []SynergyView) {
 		add(u.DefID)
 	}
 	add(lu.GK.DefID)
+	for _, a := range lu.Augments {
+		if st := crestStyle(a); st != "" && AugmentByID[a] != nil {
+			count[st]++
+		}
+	}
 	m := baseMods()
 	views := []SynergyView{}
 	for _, s := range Synergies {
@@ -414,6 +419,11 @@ func computeSynergies(lu Lineup, without string) (Mods, []SynergyView) {
 			s.apply(&m, active)
 		}
 		views = append(views, SynergyView{ID: s.ID, Count: c, Active: active})
+	}
+	for _, a := range lu.Augments {
+		if d := AugmentByID[a]; d != nil && d.team != nil {
+			d.team(&m)
+		}
 	}
 	return m, views
 }

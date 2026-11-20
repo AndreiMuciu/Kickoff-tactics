@@ -96,6 +96,12 @@ type Run struct {
 	Result    string
 	NextUID   int
 	RNGState  int64
+	// Locked keeps the market as it is for the next transfer window, once.
+	Locked bool
+	// FreeReroll: the next market refresh costs nothing (Scouting Network).
+	FreeReroll   bool
+	Augments     []string
+	AugmentOffer []string // the augments to choose from in this window, if any
 }
 
 type Action struct {
@@ -144,8 +150,14 @@ func (r *Run) withRNG(f func(g *RNG)) {
 	r.RNGState = int64(g.S)
 }
 
-// Slots is the number of outfield players allowed: one per stadium level, plus the keeper.
-func (r *Run) Slots() int { return r.Level }
+// Slots is the number of outfield players allowed: one per stadium level, plus
+// one with Squad Rotation. The keeper comes on top.
+func (r *Run) Slots() int {
+	if r.has("extraman") {
+		return r.Level + 1
+	}
+	return r.Level
+}
 
 func (r *Run) rollShop(g *RNG) {
 	byCost := map[int][]string{}
@@ -370,9 +382,11 @@ func (r *Run) gainXP(n int) {
 	}
 }
 
-// Apply validates and executes one management intent during the shop phase.
+// Apply validates and executes one management intent. The market stays open
+// during a match too: the line-up that plays it is already frozen, so whatever
+// is done counts from the next match on.
 func (r *Run) Apply(a Action) error {
-	if r.Phase != "shop" {
+	if r.Phase != "shop" && r.Phase != "halftime" {
 		return rule("You cannot do that right now.")
 	}
 	switch a.Type {
@@ -478,11 +492,17 @@ func (r *Run) Apply(a Action) error {
 		}
 		u.Line, u.Lane = a.Line, a.Lane
 	case "reroll":
-		if r.Budget < RerollCost {
+		price := r.rerollPrice()
+		if r.Budget < price {
 			return rule("Not enough budget.")
 		}
-		r.Budget -= RerollCost
+		r.Budget -= price
+		r.FreeReroll, r.Locked = false, false
 		r.withRNG(r.rollShop)
+	case "lock":
+		r.Locked = !r.Locked
+	case "augment":
+		return r.chooseAugment(a.Slot)
 	case "levelup":
 		if r.Level >= MaxLevel {
 			return rule("The stadium is already at maximum level.")
@@ -511,14 +531,33 @@ func lineupOf(name string, units []Unit) Lineup {
 	return lu
 }
 
-func (r *Run) myLineup() Lineup { return lineupOf("Your Club", r.Units) }
+// lineup is the club's line-up with its augments, which count in the match.
+func (r *Run) lineup(name string) Lineup {
+	lu := lineupOf(name, r.Units)
+	lu.Augments = append([]string(nil), r.Augments...)
+	return lu
+}
+
+func (r *Run) myLineup() Lineup { return r.lineup("Your Club") }
+
+// Deadline is what happens when a transfer window closes: free places on the
+// pitch are filled (see AutoField) and an augment left unchosen is taken for
+// the manager, the first one offered. It reports whether anything changed.
+func (r *Run) Deadline() bool {
+	changed := r.AutoField()
+	if len(r.AugmentOffer) > 0 {
+		_ = r.chooseAugment(0)
+		changed = true
+	}
+	return changed
+}
 
 // StartMatch freezes both lineups, draws a secret seed and plays the first half.
 func (r *Run) StartMatch() (*SimResult, error) {
 	if r.Phase != "shop" {
 		return nil, rule("The match cannot start right now.")
 	}
-	r.AutoField()
+	r.Deadline()
 	my := r.myLineup()
 	if len(my.Units) == 0 && r.hasEligible() {
 		return nil, rule("Put at least one outfield player who is not suspended on the pitch.")
@@ -594,7 +633,7 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 			r.Streak = 0
 		}
 		r.Streak--
-		h.Damage = 2 + (res.Score[1] - res.Score[0]) + r.Round/3
+		h.Damage = r.lessened(SoloDamage(r.Round, res.Score[1]-res.Score[0]))
 		r.Patience -= h.Damage
 	}
 	r.Match = nil
@@ -614,22 +653,13 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 			r.Result = "survived"
 		}
 	default:
-		income := BaseIncome + Interest(r.Budget)
-		if h.Won {
-			income++
-		}
-		if s := max(r.Streak, -r.Streak); s >= 4 {
-			income += 2
-		} else if s >= 2 {
-			income++
-		}
-		h.Income = income
-		r.Budget += income
+		h.Income = r.income(h.Won)
+		r.Budget += h.Income
 		r.gainXP(2)
 		r.Round++
 		r.Phase = "shop"
 		r.withRNG(func(g *RNG) {
-			r.rollShop(g)
+			r.nextWindow(g)
 			r.Opponent = genOpponent(g, r.Round)
 		})
 	}
@@ -662,6 +692,12 @@ type RunView struct {
 	History      []HistoryEntry `json:"history"`
 	Result       string         `json:"result"`
 	Commit       string         `json:"commit,omitempty"`
+	Locked       bool           `json:"locked"`
+	RerollCost   int            `json:"rerollCost"`
+	InterestMax  int            `json:"interestMax"`
+	Augments     []string       `json:"augments"`
+	AugmentOffer []string       `json:"augmentOffer"`
+	LossCost     [2]int         `json:"lossCost"` // patience a defeat in the next match costs: by one goal, by three or more
 }
 
 func (r *Run) View() RunView {
@@ -672,6 +708,15 @@ func (r *Run) View() RunView {
 		Budget: r.Budget, Level: r.Level, MaxLevel: MaxLevel, XP: r.XP, XPNeed: xpNeed[r.Level], Slots: r.Slots(),
 		Shop: r.Shop, ShopOdds: shopOdds[r.Level], Units: r.Units, Synergies: syn, Opponent: r.Opponent, OppSynergies: osyn,
 		Streak: r.Streak, Wins: r.Wins, Losses: r.Losses, History: r.History, Result: r.Result,
+		Locked: r.Locked, RerollCost: r.rerollPrice(), InterestMax: r.interestMax(),
+		Augments: r.Augments, AugmentOffer: r.AugmentOffer,
+		LossCost: [2]int{r.lessened(SoloDamage(r.Round, 1)), r.lessened(SoloDamage(r.Round, 3))},
+	}
+	if v.Augments == nil {
+		v.Augments = []string{}
+	}
+	if v.AugmentOffer == nil {
+		v.AugmentOffer = []string{}
 	}
 	if v.Units == nil {
 		v.Units = []Unit{}
@@ -688,7 +733,7 @@ func (r *Run) View() RunView {
 // Squad returns the club's current line-up under the given name. ok is false
 // when there is no outfield player to field.
 func (r *Run) Squad(name string) (lu Lineup, ok bool) {
-	lu = lineupOf(name, r.Units)
+	lu = r.lineup(name)
 	return lu, len(lu.Units) > 0
 }
 
@@ -708,6 +753,11 @@ func (r *Run) Stale() bool {
 	}
 	for _, u := range r.Opponent.Units {
 		if !known(u.Def) {
+			return true
+		}
+	}
+	for _, a := range append(append([]string(nil), r.Augments...), r.AugmentOffer...) {
+		if AugmentByID[a] == nil {
 			return true
 		}
 	}
@@ -754,10 +804,23 @@ func SimulateSeed(seedHex string, squads [2]Lineup, orders [2]string, halves int
 // ---- head-to-head series ----
 
 const (
-	VersusPatience  = 100 // live games count patience on a scale of 100; a defeat costs VersusDamage per point
-	VersusDamage    = 8
+	VersusPatience  = 100 // live games count patience on a scale of 100
 	MaxVersusRounds = 10
+	PenaltyPrize    = 2 // extra budget for winning a penalty round of a lobby
 )
+
+// VersusDamage is what a defeat costs in a live game. `stake` is how many
+// competitive rounds have been played, this one included, and the margin
+// counts up to three goals: early defeats are cheap, late ones expensive, so a
+// manager goes out gradually rather than after two bad results.
+func VersusDamage(stake, margin int) int {
+	return 3*(2+min(max(margin, 1), 3)) + 2*stake
+}
+
+// SoloDamage is what a defeat costs in a solo season (patience 20).
+func SoloDamage(round, margin int) int {
+	return 1 + min(max(margin, 1), 3) + round/3
+}
 
 // NewVersusRun is a fresh club for a series against a friend: same economy as
 // a season, but the opponent is the other manager and patience is shorter.
@@ -892,26 +955,20 @@ func (r *Run) SettleVersus(round int, opponent string, gf, ga int, won, pens boo
 		}
 		r.Streak--
 		// `stake` is how many competitive rounds have been played, this one
-		// included: 0 for a warm-up match, which costs nothing.
+		// included: 0 for a penalty round, which costs nothing.
 		if stake > 0 {
-			h.Damage = VersusDamage * (2 + max(0, ga-gf) + stake/3)
+			h.Damage = r.lessened(VersusDamage(stake, ga-gf))
 			r.Patience = max(0, r.Patience-h.Damage)
 		}
 	}
-	income := BaseIncome + Interest(r.Budget)
-	if won {
-		income++
+	h.Income = r.income(won)
+	if stake == 0 && won {
+		h.Income += PenaltyPrize
 	}
-	if s := max(r.Streak, -r.Streak); s >= 4 {
-		income += 2
-	} else if s >= 2 {
-		income++
-	}
-	h.Income = income
-	r.Budget += income
+	r.Budget += h.Income
 	r.gainXP(2)
 	r.Round++
-	r.withRNG(r.rollShop)
+	r.withRNG(r.nextWindow)
 	r.History = append(r.History, h)
 	return true
 }
@@ -948,11 +1005,19 @@ func (r *Run) Discipline(sent []SentOff, team int) {
 		if so.Team != team {
 			continue
 		}
+		// The player is found where he played; if the manager has moved him
+		// since (the market stays open during the match), by name.
+		found := false
 		for i := range r.Units {
 			u := &r.Units[i]
 			if u.Def == so.Def && u.Line == so.Line && u.Lane == so.Lane {
-				u.Ban = so.Matches
+				u.Ban, found = so.Matches, true
 				break
+			}
+		}
+		for i := range r.Units {
+			if u := &r.Units[i]; !found && u.Def == so.Def && u.Ban == 0 {
+				u.Ban, found = so.Matches, true
 			}
 		}
 	}

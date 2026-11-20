@@ -48,10 +48,13 @@ func SetSpeed(x float64) {
 
 type roundClock struct{ shopEnd, kickoff, halfEnd, h2Start, matchEnd, pensEnd, roundEnd time.Time }
 
-func clockOf(sr *store.Series) roundClock { return clockAt(sr.Round, sr.RoundStart, sr.PenTicks) }
+func clockOf(sr *store.Series) roundClock {
+	return clockAt(sr.Round, sr.RoundStart, sr.PenTicks, false)
+}
 
-// clockAt lays out one round on the shared clock.
-func clockAt(round int, start time.Time, penTicks int) roundClock {
+// clockAt lays out one round on the shared clock. A penalty round (`kicks`)
+// has no halves: the shootout starts at kick-off.
+func clockAt(round int, start time.Time, penTicks int, kicks bool) roundClock {
 	shop := shopLater
 	if round <= 1 {
 		shop = shopFirst
@@ -59,9 +62,13 @@ func clockAt(round int, start time.Time, penTicks int) roundClock {
 	var c roundClock
 	c.shopEnd = start.Add(shop)
 	c.kickoff = c.shopEnd.Add(countdownDur)
-	c.halfEnd = c.kickoff.Add(halfDur)
-	c.h2Start = c.halfEnd.Add(breakDur)
-	c.matchEnd = c.h2Start.Add(halfDur)
+	half, brk := halfDur, breakDur
+	if kicks {
+		half, brk = 0, 0
+	}
+	c.halfEnd = c.kickoff.Add(half)
+	c.h2Start = c.halfEnd.Add(brk)
+	c.matchEnd = c.h2Start.Add(half)
 	// A drawn match is followed by a shootout, as long as its recorded frames.
 	c.pensEnd = c.matchEnd.Add(time.Duration(penTicks) * tickDur)
 	c.roundEnd = c.pensEnd.Add(resultDur)
@@ -153,7 +160,7 @@ func (s *Server) advance(ctx context.Context, sr *store.Series, now time.Time) e
 			}
 			names := [2]string{sr.NameA, sr.NameB}
 			for i, run := range runs {
-				if run.AutoField() {
+				if run.Deadline() {
 					_ = s.st.SaveRun(ctx, run)
 				}
 				sr.Squads[i], _ = run.Squad(names[i])
@@ -377,9 +384,11 @@ func (s *Server) seriesAction(w http.ResponseWriter, r *http.Request, uid string
 		writeErr(w, http.StatusNotFound, "No live series.")
 		return
 	}
-	// The window closes on the server's clock, whatever the client shows.
-	if sr.Frozen || !time.Now().Before(clockOf(sr).shopEnd) {
-		writeErr(w, http.StatusConflict, "The transfer window is closed.")
+	// The market stays open during the match: the squad playing it is frozen
+	// in the series, so a signing counts from the next match on. Only the
+	// instant the window closes is off limits, while the squads are frozen.
+	if !sr.Frozen && !time.Now().Before(clockOf(sr).shopEnd) {
+		writeErr(w, http.StatusConflict, "The squads are being sent in. Try again in a second.")
 		return
 	}
 	run, err := s.st.GetRun(r.Context(), seriesRunKey(sr.ID, uid))
@@ -451,7 +460,17 @@ func (s *Server) boardView(sr *store.Series, run *game.Run, role int) game.RunVi
 	v.Round = sr.Round
 	v.MaxRounds = game.MaxVersusRounds
 	v.MaxPatience = game.VersusPatience
+	v.LossCost = versusLossCost(run, sr.Round)
 	return v
+}
+
+// versusLossCost is what a defeat in this live round costs the club, by one
+// goal and by three or more. A penalty round (stake 0) costs nothing.
+func versusLossCost(run *game.Run, stake int) [2]int {
+	if stake <= 0 {
+		return [2]int{}
+	}
+	return [2]int{run.LossFor(game.VersusDamage(stake, 1)), run.LossFor(game.VersusDamage(stake, 3))}
 }
 
 type seriesView struct {
@@ -470,6 +489,7 @@ type seriesView struct {
 	HalfMs      int64  `json:"halfMs"`
 	BreakMs     int64  `json:"breakMs"`
 	PenTicks    int    `json:"penTicks"` // shootout length, known once the match has ended
+	PenRound    bool   `json:"penRound"` // this round is a penalty shootout and nothing else
 
 	My          *game.RunView `json:"my,omitempty"`
 	Patience    [2]int        `json:"patience"`
