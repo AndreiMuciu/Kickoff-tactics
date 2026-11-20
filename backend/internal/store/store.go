@@ -124,6 +124,7 @@ type LobbySeat struct {
 	Place    int // final position, 0 while still in
 	Rated    bool
 	Patience int
+	Streak   int // +n wins or -n defeats in a row, as of the last settled round
 	LPChange int
 	Rating   int // points when the lobby started: decides which tier's table applies
 }

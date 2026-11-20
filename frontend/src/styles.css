@@ -426,3 +426,35 @@ button.stand:hover { border-color: var(--line); background: var(--panel2); }
 .watchers { color: var(--mine); }
 .spectated { color: var(--mine); font-size: 13px; margin: 0; }
 .watch-lobby { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 10px; border: 1px solid var(--mine); border-radius: 10px; background: rgba(56, 189, 248, .08); font-size: 13px; }
+
+/* Streaks: five wins in a row and the name burns, five defeats and it reels. */
+.streak-name { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.streak-badge { font-size: 10px; font-weight: 800; letter-spacing: .04em; padding: 1px 5px; border-radius: 999px; line-height: 1.4; }
+.streak-icon { display: inline-block; }
+.streak-name.hot .streak-text {
+  font-weight: 800;
+  background: linear-gradient(90deg, #fde047, #fb923c, #ef4444, #fb923c, #fde047);
+  background-size: 200% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 6px rgba(249, 115, 22, .75));
+  animation: streak-fire 1.6s linear infinite;
+}
+.streak-name.hot .streak-icon { animation: streak-flicker .6s ease-in-out infinite alternate; transform-origin: 50% 90%; }
+.streak-name.hot .streak-badge { color: #1a0f00; background: linear-gradient(90deg, #fde047, #f97316); box-shadow: 0 0 10px -1px rgba(249, 115, 22, .9); }
+.streak-name.hot.blazing .streak-text { filter: drop-shadow(0 0 10px rgba(239, 68, 68, .95)) drop-shadow(0 0 3px rgba(253, 224, 71, .9)); animation-duration: .9s; }
+.streak-name.cold .streak-text { color: #a5b4fc; display: inline-block; animation: streak-woozy 2.6s ease-in-out infinite; }
+.streak-name.cold .streak-icon { animation: streak-spin 1.8s linear infinite; opacity: .85; }
+.streak-name.cold .streak-badge { color: #c7d2fe; background: rgba(99, 102, 241, .22); border: 1px solid rgba(129, 140, 248, .55); }
+.streak-name.cold.lost .streak-text { animation-duration: 1.7s; }
+@keyframes streak-fire { to { background-position: -200% 0; } }
+@keyframes streak-flicker { from { transform: scale(1) rotate(-6deg); } to { transform: scale(1.18) rotate(5deg); } }
+@keyframes streak-spin { to { transform: rotate(360deg); } }
+@keyframes streak-woozy {
+  0%, 100% { transform: translate(0, 0) rotate(0) skewX(0); filter: blur(0); opacity: 1; }
+  20% { transform: translate(-1px, 1px) rotate(-3deg) skewX(6deg); filter: blur(.4px); opacity: .8; }
+  45% { transform: translate(2px, -1px) rotate(2.5deg) skewX(-8deg); filter: blur(1px) hue-rotate(40deg); opacity: .65; }
+  70% { transform: translate(-1px, 0) rotate(-1.5deg) skewX(4deg); filter: blur(.3px); opacity: .9; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .streak-name .streak-text, .streak-name .streak-icon { animation: none; }
+}

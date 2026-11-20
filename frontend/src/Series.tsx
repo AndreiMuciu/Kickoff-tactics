@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { StreakName } from './Streak'
 import { api, ApiError } from './api'
 import type { Action, MatchData, Meta, SeriesView } from './api'
 import ClubBoard, { Shootout, StatsTable } from './ClubBoard'
@@ -166,7 +167,10 @@ export default function Series({ id, kind, meta, photos, onClose, notify, specta
   const lastResult = view.results[view.results.length - 1]
   const patienceBar = (i: number) => (
     <div className={`chip patience t${i}`} title="The owner's patience. At zero the series is lost.">
-      <span>{view.names[i]}{i === you ? ' (you)' : ''}</span>
+      <span>
+        <StreakName name={view.names[i]} streak={view.streaks?.[i]} />
+        {i === you ? ' (you)' : ''}
+      </span>
       <div className="bar">
         <i style={{ width: `${(view.patience[i] / view.maxPatience) * 100}%` }} />
       </div>
@@ -272,7 +276,7 @@ export default function Series({ id, kind, meta, photos, onClose, notify, specta
                   <span>
                     {(view.watching ?? -1) === st.seat ? '👁 ' : ''}
                     {st.alive ? '' : `#${st.place} `}
-                    {st.name}
+                    {st.alive ? <StreakName name={st.name} streak={st.streak} /> : st.name}
                     {st.you ? ' (you)' : ''}
                     {st.facing ? ' ⚔' : ''}
                     {!!st.watchers && (
@@ -346,7 +350,7 @@ export default function Series({ id, kind, meta, photos, onClose, notify, specta
                 </select>
               </div>
             )}
-            <MatchView key={match.current.key} data={data} meta={meta} photos={photos} startScore={[0, 0]} onDone={() => {}} clock={clock} total={view.penRound ? view.penTicks : 2 * meta.halfTicks + view.penTicks} />
+            <MatchView key={match.current.key} data={data} meta={meta} photos={photos} startScore={[0, 0]} onDone={() => {}} clock={clock} total={view.penRound ? view.penTicks : 2 * meta.halfTicks + view.penTicks} streaks={view.streaks} />
             {marketOpen && (
               <MatchMarket meta={meta} photos={photos} view={view.my} canAct={!busy} busy={busy} onAction={act} offer={view.my.augmentOffer} />
             )}
@@ -354,7 +358,7 @@ export default function Series({ id, kind, meta, photos, onClose, notify, specta
               <div className="live-cover">
                 <div>
                   <p className="muted">
-                    {view.penRound ? 'Penalty round' : `Round ${view.round}`} · {view.names[0]} vs {view.names[1]}
+                    {view.penRound ? 'Penalty round' : `Round ${view.round}`} · <StreakName name={view.names[0]} streak={view.streaks?.[0]} /> vs <StreakName name={view.names[1]} streak={view.streaks?.[1]} />
                     {spectating ? ' · spectating' : <> · you are <b className={`t${you}`}>{view.names[you]}</b></>}
                   </p>
                   <div className="count">{Math.max(1, left)}</div>

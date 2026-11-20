@@ -237,3 +237,18 @@ func TestStadiumReachesAFullEleven(t *testing.T) {
 		}
 	}
 }
+
+func TestStreakOfMatchesTheRunningStreak(t *testing.T) {
+	g := NewRNG(7)
+	r, _ := NewVersusRun("t")
+	for i := 1; i <= 60; i++ {
+		won := g.Intn(100) < 50
+		r.SettleVersus(r.Round, "x", 1, 0, won, false, nil, 0, 0)
+		if got := StreakOf(r.History); got != r.Streak {
+			t.Fatalf("after %d results: StreakOf %d, Streak %d", i, got, r.Streak)
+		}
+	}
+	if StreakOf(nil) != 0 {
+		t.Fatal("an empty history has a streak")
+	}
+}

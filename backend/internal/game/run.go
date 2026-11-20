@@ -939,6 +939,23 @@ func (r *Run) AutoField() bool {
 	return false
 }
 
+// StreakOf is the run of results at the end of a history: +n for n wins in a
+// row, -n for n defeats in a row, 0 for an empty history. It matches Streak.
+func StreakOf(h []HistoryEntry) int {
+	n := 0
+	for i := len(h) - 1; i >= 0; i-- {
+		switch {
+		case h[i].Won && n >= 0:
+			n++
+		case !h[i].Won && n <= 0:
+			n--
+		default:
+			return n
+		}
+	}
+	return n
+}
+
 // SettleVersus applies one series result to the club and opens the next
 // transfer window. It is idempotent per round: a second call for the same
 // round does nothing, so a retried settlement cannot pay or punish twice.

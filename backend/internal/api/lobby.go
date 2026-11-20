@@ -347,7 +347,7 @@ func (s *Server) advanceLobby(ctx context.Context, lb *store.Lobby, now time.Tim
 							return err
 						}
 					}
-					lb.Seats[seat].Patience = run.Patience
+					lb.Seats[seat].Patience, lb.Seats[seat].Streak = run.Patience, run.Streak
 				}
 				lb.Last[p.A] = p.Squads[0]
 				if !p.Ghost {
@@ -997,6 +997,7 @@ type standing struct {
 	Alive    bool   `json:"alive"`
 	Place    int    `json:"place"`
 	Patience int    `json:"patience"`
+	Streak   int    `json:"streak"`   // +n wins or -n defeats in a row
 	Facing   bool   `json:"facing"`   // your opponent this round
 	Watchers int    `json:"watchers"` // managers spectating this one right now
 }
@@ -1089,11 +1090,12 @@ func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
 	}
 	v.WarmupRounds = lobbyWarmup
 	for i, st := range lb.Seats {
-		row := standing{Seat: i, Name: st.Name, Bot: st.Bot, You: i == seat, Alive: st.Alive, Place: st.Place, Patience: st.Patience, Facing: i == facing, Watchers: len(specs[i])}
+		row := standing{Seat: i, Name: st.Name, Bot: st.Bot, You: i == seat, Alive: st.Alive, Place: st.Place, Patience: st.Patience, Streak: st.Streak, Facing: i == facing, Watchers: len(specs[i])}
 		if hide {
 			if run, err := s.st.GetRun(r.Context(), lobbyRunKey(lb.ID, i)); err == nil {
 				if n := len(run.History); n > 0 && run.History[n-1].Round == lb.Round {
 					row.Patience += run.History[n-1].Damage
+					row.Streak = game.StreakOf(run.History[:n-1])
 					row.Alive, row.Place = true, 0
 				}
 			}
@@ -1117,6 +1119,14 @@ func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
 		for _, row := range v.Standings {
 			if row.Seat == i {
 				return row.Patience
+			}
+		}
+		return 0
+	}
+	streak := func(i int) int {
+		for _, row := range v.Standings {
+			if row.Seat == i {
+				return row.Streak
 			}
 		}
 		return 0
@@ -1148,6 +1158,10 @@ func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
 			v.Names[1], v.Opponent = p.NPC, p.NPC
 		}
 		v.Patience = [2]int{shown(p.A), shown(p.B)}
+		v.Streaks = [2]int{streak(p.A), streak(p.B)}
+		if p.Ghost {
+			v.Streaks[1] = 0 // a ghost squad has no run of its own
+		}
 		v.Spectators = append(v.Spectators, specs[p.A]...)
 		if p.B != p.A && !p.Ghost {
 			v.Spectators = append(v.Spectators, specs[p.B]...)
@@ -1155,6 +1169,7 @@ func (s *Server) lobbyGet(w http.ResponseWriter, r *http.Request, uid string) {
 		sort.Strings(v.Spectators)
 		if p.NPC != "" {
 			v.Patience[1] = game.VersusPatience // a small club has no owner to upset
+			v.Streaks[1] = 0
 		}
 	}
 

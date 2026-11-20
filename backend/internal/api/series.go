@@ -501,6 +501,7 @@ type seriesView struct {
 
 	My          *game.RunView `json:"my,omitempty"`
 	Patience    [2]int        `json:"patience"`
+	Streaks     [2]int        `json:"streaks"` // +n wins or -n defeats in a row, per side
 	MaxPatience int           `json:"maxPatience"`
 	Wins        [2]int        `json:"wins"`
 
@@ -572,6 +573,7 @@ func (s *Server) seriesGet(w http.ResponseWriter, r *http.Request, uid string) {
 		return
 	}
 	v.Patience = [2]int{runs[0].Patience, runs[1].Patience}
+	v.Streaks = [2]int{runs[0].Streak, runs[1].Streak}
 	c := clockOf(sr)
 	// The round is settled the moment the match ends, but while the shootout is
 	// still being watched the table must not give the winner away: show the
@@ -586,6 +588,7 @@ func (s *Server) seriesGet(w http.ResponseWriter, r *http.Request, uid string) {
 		for i, run := range runs {
 			if n := len(run.History); n > 0 && run.History[n-1].Round == sr.Round {
 				v.Patience[i] += run.History[n-1].Damage
+				v.Streaks[i] = game.StreakOf(run.History[:n-1])
 			}
 		}
 	}

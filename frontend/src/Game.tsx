@@ -195,7 +195,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
 
       {match && (
         <div className="overlay">
-          {match.stage === 'h1' && <MatchView key="h1" data={match.h1} meta={meta} photos={photos} startScore={[0, 0]} onDone={() => setMatch({ stage: 'halftime', h1: match.h1 })} />}
+          {match.stage === 'h1' && <MatchView key="h1" data={match.h1} meta={meta} photos={photos} startScore={[0, 0]} streaks={[run.streak, 0]} onDone={() => setMatch({ stage: 'halftime', h1: match.h1 })} />}
           {/* The market stays open in the first half and at the break. After the
               break the season has already moved on to the next round, whose
               market and budget would give the result away. */}
@@ -231,7 +231,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
             </div>
           )}
           {match.stage === 'h2' && (
-            <MatchView key="h2" data={match.h2} meta={meta} photos={photos} startScore={match.h1.score} onDone={() => setMatch({ stage: 'result', h1: match.h1, h2: match.h2 })} />
+            <MatchView key="h2" data={match.h2} meta={meta} photos={photos} startScore={match.h1.score} streaks={[run.streak, 0]} onDone={() => setMatch({ stage: 'result', h1: match.h1, h2: match.h2 })} />
           )}
           {match.stage === 'result' && match.h2.result && (
             <div className="dialog">

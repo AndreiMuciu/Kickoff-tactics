@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { StreakName } from './Streak'
 import type { GameEvent, MatchData, Meta } from './api'
 import { cropRect, initials } from './photos'
 import type { Photos } from './photos'
@@ -20,6 +21,7 @@ interface Props {
   // and `data.events` then grow in place while the match is on.
   clock?: () => number
   total?: number
+  streaks?: [number, number] // live games: runs of wins or defeats, shown on the names
 }
 
 interface Floater {
@@ -58,7 +60,7 @@ function drawPitch(ctx: CanvasRenderingContext2D) {
   }
 }
 
-export default function MatchView({ data, meta, photos, startScore, onDone, clock, total }: Props) {
+export default function MatchView({ data, meta, photos, startScore, onDone, clock, total, streaks }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const speedRef = useRef(1)
   const doneRef = useRef(onDone)
@@ -368,7 +370,9 @@ export default function MatchView({ data, meta, photos, startScore, onDone, cloc
   return (
     <div className="match">
       <div className="scoreboard">
-        <span className="team t0">{data.names[0]}</span>
+        <span className="team t0">
+          <StreakName name={data.names[0]} streak={streaks?.[0]} />
+        </span>
         <span className="score">
           {score[0]} : {score[1]}
           {pens && (
@@ -377,7 +381,9 @@ export default function MatchView({ data, meta, photos, startScore, onDone, cloc
             </small>
           )}
         </span>
-        <span className="team t1">{data.names[1]}</span>
+        <span className="team t1">
+          <StreakName name={data.names[1]} streak={streaks?.[1]} />
+        </span>
         <span className="clock">{minute > 90 ? 'penalties' : `${minute}' · ${minute < 45 ? 'first half' : 'second half'}`}</span>
       </div>
       <div className="match-body">

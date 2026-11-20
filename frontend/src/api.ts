@@ -228,6 +228,7 @@ export interface SeriesView {
   penRound?: boolean // the round is a penalty shootout and nothing else
   my?: RunView
   patience: [number, number]
+  streaks?: [number, number] // +n wins or -n defeats in a row, per side
   maxPatience: number
   wins: [number, number]
   commit?: string
@@ -278,6 +279,7 @@ export interface Standing {
   alive: boolean
   place: number
   patience: number
+  streak?: number // +n wins or -n defeats in a row
   facing: boolean
   watchers?: number // managers spectating this one right now
 }

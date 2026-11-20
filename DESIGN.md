@@ -317,6 +317,11 @@ A manager waits in one queue or one friends lobby at a time.
   quick. At zero the manager is out and takes the next free finishing position; the last one in
   wins. Round 26 of matches is the cap. A friends series (10 rounds) now usually runs to the cap and
   is decided on patience.
+- **Streaks**: five wins in a row set a manager's name on fire (animated flame gradient and a
+  "5W" badge, stronger from eight); five defeats in a row make it reel (a woozy, blurred name and a
+  "5L" badge). Shown on the scoreboard, the patience bars, the countdown screen and the lobby list,
+  and on your own name in solo matches. Penalty rounds count. While a shootout is still being
+  watched, the streak shown is the one from before the round, so it cannot give the result away.
 - **Spectating**: click a manager in the lobby list to see their board, combinations, augments,
   level and budget during the window, and their match while it is played (`/api/lobby?watch=seat`);
   a selector over the match switches between matches. A manager who is out can keep watching until
