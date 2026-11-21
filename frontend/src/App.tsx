@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from './api'
 import type { Me, Meta, RankedView, SeriesView } from './api'
 import Auth from './Auth'
+import Feedback from './Feedback'
 import Game from './Game'
 import Home from './Home'
 import Series from './Series'
@@ -217,7 +218,10 @@ export default function App() {
             setResetToken(null)
             setMe(null)
           }}
-          onDone={loadMe}
+          onDone={(restored) => {
+            if (restored) notify('Welcome back! Your account is no longer scheduled for deletion.')
+            void loadMe()
+          }}
         />
         <CookieNotice />
         {toast && <div className="toast">{toast}</div>}
@@ -247,6 +251,7 @@ export default function App() {
             void loadMe()
           }}
         />
+        <Feedback screen="lobby" />
         {toast && <div className="toast">{toast}</div>}
       </>
     )
@@ -266,6 +271,7 @@ export default function App() {
             void loadMe()
           }}
         />
+        <Feedback screen="series" />
         {toast && <div className="toast">{toast}</div>}
       </>
     )
@@ -341,6 +347,7 @@ export default function App() {
       )}
       <CookieNotice />
       {toast && <div className="toast">{toast}</div>}
+      <Feedback screen={view.at === 'game' ? 'solo' : 'home'} />
     </>
   )
 }

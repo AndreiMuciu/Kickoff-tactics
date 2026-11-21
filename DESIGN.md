@@ -68,7 +68,19 @@ Season of 8 fixtures against server-run clubs of rising strength.
 - **Stadium** (level 1-10): one outfield player per level, plus the keeper, and better players on the market.
   Level 10 is a full eleven. 2 free XP per fixture; 4 XP cost 4. XP per level: 2, 2, 4, 6, 8, 10, 14, 18, 24.
   Squad Rotation adds one outfield player, but never past ten.
-- **Opponents** field 1, 2, 3, 3, 4, 5, 6, 7 outfield players across the eight fixtures.
+- **Opponents** field 1, 1, 2, 3, 4, 4, 5, 6 outfield players across the eight fixtures, of cost up
+  to 1, 1, 2, 2, 3, 3, 4, 4, with a two-star chance of 0-60% (`soloCount`, `soloMaxCost`,
+  `soloStar2` in `game/run.go`).
+- **Story** (solo only): the season is told as a story. An opening chapter before fixture 1, one
+  line about every rival, the owner's reaction after each match and an epilogue per ending
+  (`frontend/src/story.ts`, words only). Before fixtures 3 and 6 a **club event** asks a question
+  with two answers that change the season (`game/story.go`): a shirt sponsor (+5 budget and -1
+  patience, or +2 patience), a press conference (promise a win: +3 patience if kept, the defeat
+  costs 2 more if not), the youth cup (+4 XP or +2 patience), a training camp (-3 budget for +8 XP,
+  or +2 XP), derby week (promise a win by two: +4 patience), the owner's bet (+5 budget for a clean
+  sheet, or +2 now), an agent (a free fresh market, or +1 budget). Never the same event twice in a
+  season; an event left unanswered at kick-off takes its first answer (the second if the first is
+  not affordable). Augment rounds are 2, 5 and 8, so a window never asks both.
 - **Merge**: three identical players become one with an extra ★ (stats ×1.3, then ×1.65); three ★★
   make a ★★★. The market shows the stars you already own of a player and marks a card that would
   complete a merge.
@@ -210,8 +222,11 @@ five scores, penalties 0.050 a match instead of 0.015.
   less than 43% or more than 61%. Defenders rate highest, playmakers lowest.
 - **Price and stars**: five players beat five who cost one less in 59 to 69%; a star is worth
   about 80% against the same player without it.
-- **Solo season** played the way the lobby bots play: 75% are sacked, mostly at fixtures 7 and 8;
-  3% win the title. It is hard at the end; untouched so far.
+- **Solo season** played the way the lobby bots play (always the first story answer): before
+  2026-11-21, 42% sacked and 4% champions, winning 16% and 12% of fixtures 7 and 8. Softer
+  opponents since: 19% sacked, 14% champions, 50% European place; win rate per fixture
+  54 / 74 / 61 / 59 / 44 / 47 / 31 / 26% (the last two stay the hard finale). A person plays
+  better than the bot.
 - `TestMatchInvariants` plays 4000 random matches and checks that score, goal events, shootouts,
   sendings-off and positions tell one story.
 
@@ -436,11 +451,70 @@ account (`plan`), so it is the same in a solo season, a live series and every lo
   short of the next tier.
 - The plan never buys, sells or moves anyone.
 
+## Profile, achievements, history, feedback [in demo]
+
+- **Achievements** (25, `api/achievements.go`): counters reaching a target (first win, 50 wins,
+  100 matches, 100 goals, 3-goal win, 10 clean sheets, five wins in a row in one game, a three-star
+  player, stadium level 10, solo survival / title / five titles / all eight fixtures won, lobbies,
+  top 4, lobby wins, ranked lobbies, live series won, feedback sent) or a division reached. Decided
+  on the server whenever counters change, stored with their date (`achieved`), never taken back.
+  Unseen ones are counted on Home (🏅 n) and marked new in the profile, which marks them seen.
+  A solo match result names the achievements it unlocked.
+- **Match history** (`games` collection, one document per finished game: solo season, lobby or
+  series, with its matches): profile tab, 10 per page, newest first (`GET /api/history?page=`).
+- **Friend profiles**: clicking a friend's name opens his profile (overview and achievements,
+  without email or history). `GET /api/profile?name=` answers only for accepted friends.
+- **Feedback**: a button on every screen opens a form (idea / bug / other, 10-1500 characters).
+  Stored in the `feedback` collection and mailed to `FEEDBACK_TO`, or to the address of
+  `MAIL_FROM` when unset. Five messages, then one per 10 minutes per manager.
+
+## Server performance notes (2026-11-21)
+
+- A match is simulated once per server: `api/simcache.go` keeps the last 96 results keyed by seed,
+  squads, orders and halves, and concurrent requests for a match being simulated wait for that one
+  run. Before, every poll of every manager and spectator re-simulated it (~0.4 ms CPU and ~350 KB
+  allocated per match).
+- A lobby bot shops at most once per round (`Run.BotRound`): a server that lost the race to save
+  the lobby used to make the bot shop a second time on retry.
+- Home's top ten is read at most every 5 s per server; mail delivery has a 30 s deadline; the
+  Mongo client keeps 4 connections warm and compresses traffic (zstd/snappy).
+- Not done yet (measured as worth it later): one `$in` read for a lobby's runs, a per-entry queue
+  update instead of rewriting the queue document on every poll, a per-lobby lease so only one
+  server advances a lobby at a phase boundary, `GOMEMLIMIT` with a container memory limit.
+  Splitting one lobby's four simulations across cores is not worth it: they cost ~1.6 ms against
+  ~16 sequential Mongo round trips.
+
+## Account deletion [in demo]
+
+Profile → Account → Delete account, confirmed with the password (`api/delete.go`). Refused while
+the manager is in a live lobby, a live series or a friends lobby; a pending series invitation is
+dropped and he leaves any queue.
+
+- **At once**: the account is marked `deletedat`, every session and mailed link stops working, a
+  mail gives the erase date. For 30 days it is hidden (rankings, friend lists, friend profiles,
+  searches, invites) but kept whole, and the **username and email stay taken**. Signing in within
+  the 30 days restores everything.
+- **After 30 days** a janitor on every server (hourly, safe to repeat) erases it
+  (`store.PurgeUser`): own match history, solo and series clubs, friendships and their chats,
+  sessions and tokens go; his name in other managers' history becomes "Former manager #xxxxxx";
+  feedback stays without user id and name; the user document becomes a stub (id, that name,
+  dates). The username and email are then free.
+- Outside the app: mails already sent (feedback in the contact inbox) and server logs, which rotate.
+
+## Ranked seasons [in demo]
+
+A season is a calendar month: season 1 is November 2026 (`api/seasons.go`). When it ends every
+manager keeps half his points (rounded down), and whoever finished a ranked lobby in it gets a
+badge with the division of his final points (`badges`, shown in the profile). The reset is lazy:
+the first server that needs the ranking in a new month runs one `UpdateMany` that only touches
+managers still in an older season, so it is safe to run twice or on two servers at once. Home
+shows the season and when it ends; history rows carry their season.
+
 ## Not built yet
 
-- Rating by opponent strength (points depend on place and own division only), seasons and resets,
+- Rating by opponent strength (points depend on place and own division only),
   a shared player pool, items or carousel rounds between matches, balance measurement of augments.
-- Sign-in by email, two-factor sign-in, account deletion, avatars.
+- Sign-in by email, two-factor sign-in, avatars.
 - Cards, items, substitutions at half-time, set pieces, 3D graphics.
 
 ## Open questions

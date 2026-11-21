@@ -7,7 +7,9 @@ package mail
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -63,7 +65,59 @@ func (s SMTP) Send(m Message) error {
 		auth = smtp.PlainAuth("", s.User, s.Pass, s.Host)
 	}
 	header, sender := sender(s.From)
-	return smtp.SendMail(net.JoinHostPort(s.Host, s.Port), auth, sender, []string{clean(m.To)}, raw(header, sender, m, time.Now()))
+	return s.send(auth, sender, clean(m.To), raw(header, sender, m, time.Now()))
+}
+
+// sendTimeout bounds a whole delivery: a mail server that stops answering
+// must not hold a goroutine and a connection forever.
+const sendTimeout = 30 * time.Second
+
+// send is smtp.SendMail with a deadline on the connection.
+func (s SMTP) send(auth smtp.Auth, from, to string, msg []byte) error {
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(s.Host, s.Port), 10*time.Second)
+	if err != nil {
+		return err
+	}
+	_ = conn.SetDeadline(time.Now().Add(sendTimeout))
+	c, err := smtp.NewClient(conn, s.Host)
+	if err != nil {
+		conn.Close()
+		return err
+	}
+	defer c.Close()
+	if err := c.Hello("localhost"); err != nil {
+		return err
+	}
+	if ok, _ := c.Extension("STARTTLS"); ok {
+		if err := c.StartTLS(&tls.Config{ServerName: s.Host}); err != nil {
+			return err
+		}
+	}
+	if auth != nil {
+		if ok, _ := c.Extension("AUTH"); !ok {
+			return errors.New("smtp: the server does not offer authentication")
+		}
+		if err := c.Auth(auth); err != nil {
+			return err
+		}
+	}
+	if err := c.Mail(from); err != nil {
+		return err
+	}
+	if err := c.Rcpt(to); err != nil {
+		return err
+	}
+	w, err := c.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(msg); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return c.Quit()
 }
 
 // raw writes the message as it travels: headers, then the plain text, and the

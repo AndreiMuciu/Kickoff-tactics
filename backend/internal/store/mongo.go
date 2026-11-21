@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"time"
 
@@ -27,6 +28,8 @@ type Mongo struct {
 	lobbies  *mongo.Collection
 	meta     *mongo.Collection
 	tokens   *mongo.Collection
+	games    *mongo.Collection
+	feedback *mongo.Collection
 }
 
 type sessionDoc struct {
@@ -41,7 +44,11 @@ func NewMongo(ctx context.Context, uri, db string) (*Mongo, error) {
 	opts := options.Client().ApplyURI(uri).
 		SetServerSelectionTimeout(5 * time.Second).
 		SetConnectTimeout(5 * time.Second).
-		SetAppName("footy")
+		SetAppName("footy").
+		// Keep a few connections open so a quiet server answers without a
+		// fresh TLS handshake to Atlas; compress traffic where the server allows.
+		SetMinPoolSize(4).
+		SetCompressors([]string{"zstd", "snappy"})
 	client, err := mongo.Connect(opts)
 	if err != nil {
 		return nil, err
@@ -52,7 +59,8 @@ func NewMongo(ctx context.Context, uri, db string) (*Mongo, error) {
 	}
 	d := client.Database(db)
 	m := &Mongo{client: client, users: d.Collection("users"), sessions: d.Collection("sessions"),
-		friends: d.Collection("friendships"), messages: d.Collection("messages"), runs: d.Collection("runs"), series: d.Collection("series"), lobbies: d.Collection("lobbies"), meta: d.Collection("meta"), tokens: d.Collection("tokens")}
+		friends: d.Collection("friendships"), messages: d.Collection("messages"), runs: d.Collection("runs"), series: d.Collection("series"), lobbies: d.Collection("lobbies"), meta: d.Collection("meta"), tokens: d.Collection("tokens"),
+		games: d.Collection("games"), feedback: d.Collection("feedback")}
 	indexes := []struct {
 		c *mongo.Collection
 		m mongo.IndexModel
@@ -75,6 +83,9 @@ func NewMongo(ctx context.Context, uri, db string) (*Mongo, error) {
 		{m.series, mongo.IndexModel{Keys: bson.D{{Key: "b", Value: 1}, {Key: "status", Value: 1}}}},
 		{m.series, mongo.IndexModel{Keys: bson.D{{Key: "createdat", Value: 1}}, Options: options.Index().SetExpireAfterSeconds(24 * 3600)}},
 		{m.friends, mongo.IndexModel{Keys: bson.D{{Key: "b", Value: 1}}}},
+		{m.games, mongo.IndexModel{Keys: bson.D{{Key: "userid", Value: 1}, {Key: "at", Value: -1}}}},
+		{m.feedback, mongo.IndexModel{Keys: bson.D{{Key: "at", Value: -1}}}},
+		{m.users, mongo.IndexModel{Keys: bson.D{{Key: "deletedat", Value: 1}}, Options: options.Index().SetSparse(true)}},
 	}
 	for _, ix := range indexes {
 		if _, err := ix.c.Indexes().CreateOne(ctx, ix.m); err != nil {
@@ -172,6 +183,55 @@ func (m *Mongo) SetPlan(ctx context.Context, uid string, plan []string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (m *Mongo) SetAchieved(ctx context.Context, uid string, got map[string]time.Time) error {
+	set := bson.D{}
+	for k, v := range got {
+		set = append(set, bson.E{Key: "achieved." + k, Value: v})
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	// Accounts without any achievement may hold `achieved: null`; a field
+	// cannot be set inside null, so make it a document first.
+	if _, err := m.users.UpdateOne(ctx, bson.D{{Key: "_id", Value: uid}, {Key: "achieved", Value: nil}}, bson.D{{Key: "$set", Value: bson.D{{Key: "achieved", Value: bson.D{}}}}}); err != nil {
+		return err
+	}
+	_, err := m.users.UpdateOne(ctx, id(uid), bson.D{{Key: "$set", Value: set}})
+	return err
+}
+
+func (m *Mongo) SetAchSeen(ctx context.Context, uid string, at time.Time) error {
+	_, err := m.users.UpdateOne(ctx, id(uid), bson.D{{Key: "$set", Value: bson.D{{Key: "achseen", Value: at}}}})
+	return err
+}
+
+func (m *Mongo) AddGame(ctx context.Context, g *GameRecord) error {
+	_, err := m.games.InsertOne(ctx, g)
+	return err
+}
+
+func (m *Mongo) ListGames(ctx context.Context, userID string, skip, limit int) ([]GameRecord, int, error) {
+	filter := bson.D{{Key: "userid", Value: userID}}
+	total, err := m.games.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	cur, err := m.games.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "at", Value: -1}, {Key: "_id", Value: -1}}).SetSkip(int64(skip)).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, 0, err
+	}
+	out := []GameRecord{}
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, 0, err
+	}
+	return out, int(total), nil
+}
+
+func (m *Mongo) AddFeedback(ctx context.Context, f *Feedback) error {
+	_, err := m.feedback.InsertOne(ctx, f)
+	return err
 }
 
 func (m *Mongo) AddStats(ctx context.Context, uid string, delta map[string]int) error {
@@ -496,6 +556,34 @@ func (m *Mongo) SaveQueue(ctx context.Context, q *Queue) error {
 	return nil
 }
 
+func (m *Mongo) RollSeason(ctx context.Context, to int, tiers []TierMin) error {
+	if to < 2 || len(tiers) == 0 {
+		return nil
+	}
+	lp := bson.D{{Key: "$ifNull", Value: bson.A{"$lp", 0}}}
+	// The division of the points held at the end of the season.
+	branches := bson.A{}
+	for i := len(tiers) - 1; i > 0; i-- {
+		branches = append(branches, bson.D{{Key: "case", Value: bson.D{{Key: "$gte", Value: bson.A{lp, tiers[i].Min}}}}, {Key: "then", Value: tiers[i].Name}})
+	}
+	tier := bson.D{{Key: "$switch", Value: bson.D{{Key: "branches", Value: branches}, {Key: "default", Value: tiers[0].Name}}}}
+	badge := bson.D{{Key: "season", Value: to - 1}, {Key: "tier", Value: tier}, {Key: "points", Value: lp}}
+	played := bson.D{{Key: "$gt", Value: bson.A{bson.D{{Key: "$ifNull", Value: bson.A{"$seasongames", 0}}}, 0}}}
+	badges := bson.D{{Key: "$ifNull", Value: bson.A{"$badges", bson.A{}}}}
+	update := mongo.Pipeline{{{Key: "$set", Value: bson.D{
+		{Key: "badges", Value: bson.D{{Key: "$cond", Value: bson.A{played, bson.D{{Key: "$concatArrays", Value: bson.A{badges, bson.A{badge}}}}, badges}}}},
+		{Key: "lp", Value: bson.D{{Key: "$toInt", Value: bson.D{{Key: "$floor", Value: bson.D{{Key: "$divide", Value: bson.A{lp, 2}}}}}}}},
+		{Key: "seasongames", Value: 0},
+		{Key: "season", Value: to},
+	}}}}
+	filter := bson.D{{Key: "$or", Value: bson.A{
+		bson.D{{Key: "season", Value: bson.D{{Key: "$lt", Value: to}}}},
+		bson.D{{Key: "season", Value: bson.D{{Key: "$exists", Value: false}}}},
+	}}}
+	_, err := m.users.UpdateMany(ctx, filter, update)
+	return err
+}
+
 func (m *Mongo) AddRating(ctx context.Context, userID string, delta int) error {
 	// One atomic update: add the points, but never drop below zero.
 	lp := bson.D{{Key: "$ifNull", Value: bson.A{"$lp", 0}}}
@@ -503,22 +591,99 @@ func (m *Mongo) AddRating(ctx context.Context, userID string, delta int) error {
 	update := mongo.Pipeline{{{Key: "$set", Value: bson.D{
 		{Key: "lp", Value: bson.D{{Key: "$max", Value: bson.A{0, bson.D{{Key: "$add", Value: bson.A{lp, delta}}}}}}},
 		{Key: "games", Value: bson.D{{Key: "$add", Value: bson.A{games, 1}}}},
+		{Key: "seasongames", Value: bson.D{{Key: "$add", Value: bson.A{bson.D{{Key: "$ifNull", Value: bson.A{"$seasongames", 0}}}, 1}}}},
 	}}}}
 	_, err := m.users.UpdateOne(ctx, id(userID), update)
 	return err
 }
 
+// visible keeps deleted accounts (and those waiting to be) out of rankings.
+var visible = bson.E{Key: "deletedat", Value: bson.D{{Key: "$exists", Value: false}}}
+
+func (m *Mongo) SetDeleted(ctx context.Context, uid string, at time.Time) error {
+	update := bson.D{{Key: "$set", Value: bson.D{{Key: "deletedat", Value: at}}}}
+	if at.IsZero() {
+		update = bson.D{{Key: "$unset", Value: bson.D{{Key: "deletedat", Value: ""}}}}
+	}
+	res, err := m.users.UpdateOne(ctx, id(uid), update)
+	if err == nil && res.MatchedCount == 0 {
+		return ErrNotFound
+	}
+	return err
+}
+
+func (m *Mongo) DueForPurge(ctx context.Context, before time.Time, limit int) ([]User, error) {
+	cur, err := m.users.Find(ctx, bson.D{
+		{Key: "deletedat", Value: bson.D{{Key: "$lt", Value: before}}},
+		{Key: "purged", Value: bson.D{{Key: "$ne", Value: true}}},
+	}, options.Find().SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	out := []User{}
+	err = cur.All(ctx, &out)
+	return out, err
+}
+
+func (m *Mongo) PurgeUser(ctx context.Context, u *User, anon string) error {
+	uid, name := u.ID, u.Name
+	steps := []func() error{
+		func() error { _, err := m.games.DeleteMany(ctx, bson.D{{Key: "userid", Value: uid}}); return err },
+		func() error {
+			_, err := m.games.UpdateMany(ctx, bson.D{{Key: "opponent", Value: name}}, bson.D{{Key: "$set", Value: bson.D{{Key: "opponent", Value: anon}}}})
+			return err
+		},
+		func() error {
+			_, err := m.games.UpdateMany(ctx, bson.D{{Key: "matches.opponent", Value: name}},
+				bson.D{{Key: "$set", Value: bson.D{{Key: "matches.$[m].opponent", Value: anon}}}},
+				options.UpdateMany().SetArrayFilters([]any{bson.D{{Key: "m.opponent", Value: name}}}))
+			return err
+		},
+		func() error { _, err := m.runs.DeleteOne(ctx, id(uid)); return err },
+		func() error {
+			_, err := m.runs.DeleteMany(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$regex", Value: "^vs:.*:" + regexp.QuoteMeta(uid) + "$"}}}})
+			return err
+		},
+		func() error {
+			_, err := m.messages.DeleteMany(ctx, bson.D{{Key: "pair", Value: bson.D{{Key: "$regex", Value: "(^|:)" + regexp.QuoteMeta(uid) + "($|:)"}}}})
+			return err
+		},
+		func() error {
+			_, err := m.friends.DeleteMany(ctx, bson.D{{Key: "$or", Value: bson.A{bson.D{{Key: "a", Value: uid}}, bson.D{{Key: "b", Value: uid}}}}})
+			return err
+		},
+		func() error {
+			_, err := m.feedback.UpdateMany(ctx, bson.D{{Key: "userid", Value: uid}}, bson.D{{Key: "$set", Value: bson.D{{Key: "userid", Value: ""}, {Key: "name", Value: ""}}}})
+			return err
+		},
+		func() error { _, err := m.sessions.DeleteMany(ctx, bson.D{{Key: "userid", Value: uid}}); return err },
+		func() error { _, err := m.tokens.DeleteMany(ctx, bson.D{{Key: "userid", Value: uid}}); return err },
+		// Last: only once everything else is gone is the account marked purged.
+		func() error {
+			stub := User{ID: uid, Name: anon, NameKey: "deleted:" + uid, CreatedAt: u.CreatedAt, DeletedAt: u.DeletedAt, Purged: true}
+			_, err := m.users.ReplaceOne(ctx, bson.D{{Key: "_id", Value: uid}, {Key: "purged", Value: bson.D{{Key: "$ne", Value: true}}}}, &stub)
+			return err
+		},
+	}
+	for _, step := range steps {
+		if err := step(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *Mongo) RankInfo(ctx context.Context, lp int) (int, int, error) {
-	above, err := m.users.CountDocuments(ctx, bson.D{{Key: "lp", Value: bson.D{{Key: "$gt", Value: lp}}}})
+	above, err := m.users.CountDocuments(ctx, bson.D{{Key: "lp", Value: bson.D{{Key: "$gt", Value: lp}}}, visible})
 	if err != nil {
 		return 0, 0, err
 	}
-	total, err := m.users.EstimatedDocumentCount(ctx)
+	total, err := m.users.CountDocuments(ctx, bson.D{visible})
 	return int(above), int(total), err
 }
 
 func (m *Mongo) TopRated(ctx context.Context, n int) ([]User, error) {
-	cur, err := m.users.Find(ctx, bson.D{},
+	cur, err := m.users.Find(ctx, bson.D{visible},
 		options.Find().SetSort(bson.D{{Key: "lp", Value: -1}, {Key: "name", Value: 1}}).SetLimit(int64(n)))
 	if err != nil {
 		return nil, err

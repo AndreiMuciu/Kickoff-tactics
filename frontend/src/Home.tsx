@@ -22,6 +22,8 @@ interface Props {
 
 export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, onWatchLobby, onLogout, onProfileChanged, notify }: Props) {
   const [profile, setProfile] = useState(false)
+  // A friend whose profile is open (read-only).
+  const [friendProfile, setFriendProfile] = useState<string | null>(null)
   const [list, setList] = useState<FriendList>({ friends: [], incoming: [], outgoing: [] })
   const [add, setAdd] = useState('')
   const [open, setOpen] = useState<string | null>(null)
@@ -123,7 +125,13 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
       <header className="top">
         <h1>Kickoff Tactics</h1>
         <button className="chip chip-btn" onClick={() => setProfile(true)} title="Profile, statistics, email and password">
-          Manager <b>{me.name}</b> ▾
+          Manager <b>{me.name}</b>
+          {me.newAchievements > 0 && (
+            <span className="ach-dot" title={`${me.newAchievements} new achievement${me.newAchievements === 1 ? '' : 's'}`}>
+              🏅 {me.newAchievements}
+            </span>
+          )}{' '}
+          ▾
         </button>
         <button className="restart" onClick={onLogout}>
           Log out
@@ -137,7 +145,17 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
           </button>
         </div>
       )}
-      {profile && <Profile onClose={() => setProfile(false)} onChanged={onProfileChanged} />}
+      {profile && (
+        <Profile
+          onClose={() => setProfile(false)}
+          onChanged={onProfileChanged}
+          onDeleted={(at) => {
+            notify(`Account deleted. It will be erased on ${new Date(at).toLocaleDateString()}; sign in before then to keep it.`)
+            onLogout()
+          }}
+        />
+      )}
+      {friendProfile && <Profile name={friendProfile} onClose={() => setFriendProfile(null)} onChanged={() => {}} />}
       <main className="home">
         <section className="panel hero">
           <h2>{inSeason ? 'Your season is waiting' : 'Start a season'}</h2>
@@ -183,6 +201,13 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
                   Divisions & points →
                 </button>
               </div>
+              {ranked.season && (
+                <p className="season-line">
+                  <b>Season {ranked.season.number}</b> · ends {new Date(ranked.season.endsAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })} (
+                  {Math.max(0, Math.ceil((ranked.season.endsAt - Date.now()) / 86400000))} days). At the end everyone keeps half their points, and ranked players get a badge
+                  with the division they finished in.
+                </p>
+              )}
               <p className="muted">Eight managers, everyone starts from scratch with 100 owner's patience. The first two rounds are penalty shootouts between managers, with nothing at stake. After that you are paired with another survivor every round and a defeat costs patience, a little at first and more as the lobby goes on; the last one standing wins. Out early? You can stay and watch the others to the end. Everyone starts at 0 points. Ranked moves them (never below 0): low divisions pay a lot for a good finish and take little for a bad one. It looks for eight managers of your level first; after two minutes bots take the empty seats. Normal is the same game with nothing at stake; after a minute bots take the empty seats.</p>
               {ranked.watchLobby && (
                 <div className="watch-lobby">
@@ -378,7 +403,10 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
             return (
               <div key={f.name} className={`friend ${open === f.name ? 'open' : ''}`}>
                 <span>
-                  <i className={`dot ${f.online ? 'on' : ''}`} title={f.online ? 'Online' : 'Offline'} /> <b>{f.name}</b>
+                  <i className={`dot ${f.online ? 'on' : ''}`} title={f.online ? 'Online' : 'Offline'} />{' '}
+                  <button className="link friend-name" title={`Open ${f.name}'s profile`} onClick={() => setFriendProfile(f.name)}>
+                    <b>{f.name}</b>
+                  </button>
                   <small className={`presence ${f.online ? 'on' : ''}`}>{f.online ? 'online' : 'offline'}</small>
                 </span>
                 <span className="row">

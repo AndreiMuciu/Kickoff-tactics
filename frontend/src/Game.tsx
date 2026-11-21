@@ -5,13 +5,7 @@ import ClubBoard, { Shootout, StatsTable } from './ClubBoard'
 import { MatchMarket } from './Market'
 import MatchView from './MatchView'
 import type { Photos } from './photos'
-
-const RESULT_TEXT: Record<string, { title: string; text: string }> = {
-  champion: { title: '🏆 Champions!', text: 'The owner is building you a statue outside the stadium.' },
-  europe: { title: '🎟 European football', text: 'A solid season. The owner extends your contract.' },
-  survived: { title: '😮‍💨 You lasted the season', text: 'Not pretty, but you were still in the dugout at the end.' },
-  sacked: { title: '📦 Sacked', text: "The owner's patience ran out. Time to clear your locker." },
-}
+import { EPILOGUE, INTRO, PLEDGES, RIVALS, reaction } from './story'
 
 type MatchStage =
   | { stage: 'h1'; h1: HalfData }
@@ -51,6 +45,8 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [match, setMatch] = useState<MatchStage | null>(null)
+  // The opening chapter is shown once per season, before the first fixture.
+  const [introSeen, setIntroSeen] = useState(false)
 
   const fail = useCallback((e: unknown) => {
     setToast(e instanceof ApiError ? e.message : "We can't reach the game right now. Try again in a moment.")
@@ -103,6 +99,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
   const newRun = () =>
     guard(async () => {
       setMatch(null)
+      setIntroSeen(false)
       setRun(await api.newRun())
     })
   const kickoff = () => guard(async () => setMatch({ stage: 'h1', h1: await api.startMatch() }))
@@ -151,6 +148,11 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
             {run.wins}W {run.losses}L
           </b>
         </div>
+        {run.pledge && PLEDGES[run.pledge] && (
+          <div className="chip pledge" title="Judged by the next match">
+            {PLEDGES[run.pledge]}
+          </div>
+        )}
         {Math.abs(run.streak) >= 2 && (
           <div className="chip">
             {run.streak > 0 ? '🔥' : '🧊'} streak {Math.abs(run.streak)}
@@ -178,6 +180,14 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
         }
         side={
           <div className="panel">
+            {run.phase === 'shop' && (
+              <div className="rival">
+                <h3>
+                  Fixture {run.round}: {run.opponent.name}
+                </h3>
+                {RIVALS[run.opponent.name] && <p className="muted">{RIVALS[run.opponent.name]}</p>}
+              </div>
+            )}
             <h3>Season</h3>
             {run.history.length === 0 && <p className="muted">Your first match awaits.</p>}
             {run.history.map((h) => (
@@ -187,6 +197,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
                   {h.gf}–{h.ga}
                 </b>
                 {h.pens ? ' (pens)' : ''}
+                {h.note && <small className="story-note"> · {h.note}</small>}
               </p>
             ))}
           </div>
@@ -240,10 +251,15 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
               </h2>
               <Shootout data={match.h2} />
               <StatsTable data={match.h2} />
+              <p className="owner-says">{reaction(match.h2.result.won, match.h2.result.gf, match.h2.result.ga, match.h2.result.round)}</p>
               <p>
                 {match.h2.result.won ? 'The owner is smiling.' : `The owner's patience drops by ${match.h2.result.damage}.`}
                 {match.h2.result.income > 0 && ` Budget received: +${match.h2.result.income} 💰.`}
               </p>
+              {match.h2.result.note && <p className="story-note">📰 {match.h2.result.note}</p>}
+              {!!match.h2.unlocked?.length && (
+                <p className="ach-unlocked">🏅 Achievement unlocked: {match.h2.unlocked.map((a) => `${a.icon} ${a.name}`).join(', ')}</p>
+              )}
               <button
                 className="primary"
                 onClick={() => {
@@ -264,8 +280,8 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
       {run.phase === 'ended' && !match && (
         <div className="overlay">
           <div className="dialog">
-            <h2>{RESULT_TEXT[run.result]?.title}</h2>
-            <p>{RESULT_TEXT[run.result]?.text}</p>
+            <h2>{EPILOGUE[run.result]?.title}</h2>
+            <p>{EPILOGUE[run.result]?.text}</p>
             <p>
               Record: {run.wins} wins, {run.losses} defeats.
               {last && ` Last match: ${last.gf}–${last.ga} against ${last.opponent}.`}
@@ -275,6 +291,40 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
               <button className="primary big" disabled={busy} onClick={newRun}>
                 New season
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {shopPhase && run.round === 1 && run.history.length === 0 && !introSeen && (
+        <div className="overlay story-overlay">
+          <div className="dialog story">
+            <small className="story-kicker">Chapter 1</small>
+            <h2>{INTRO.title}</h2>
+            {INTRO.text.map((t, i) => (
+              <p key={i}>{t}</p>
+            ))}
+            <button className="primary big" onClick={() => setIntroSeen(true)}>
+              Take the job
+            </button>
+          </div>
+        </div>
+      )}
+      {shopPhase && run.event && (
+        <div className="overlay story-overlay">
+          <div className="dialog story">
+            <small className="story-kicker">Before fixture {run.round}</small>
+            <h2>{run.event.title}</h2>
+            <p>{run.event.text}</p>
+            <div className="story-choices">
+              {run.event.choices.map((c, i) => {
+                const short = (c.cost ?? 0) > run.budget
+                return (
+                  <button key={i} className="tactic" disabled={busy || short} title={short ? 'Not enough budget' : undefined} onClick={() => act({ type: 'story', slot: i })}>
+                    <b>{c.label}</b>
+                    <small>{c.effect}</small>
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>

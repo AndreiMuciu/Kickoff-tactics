@@ -196,9 +196,9 @@ func lobbyClock(lb *store.Lobby) roundClock {
 // penalty round is the shootout alone, whatever `halves` says.
 func playPair(lb *store.Lobby, p *store.LobbyPair, halves int) (*game.SimResult, error) {
 	if p.Shootout {
-		return game.SimulateShootout(p.Seed, p.Squads)
+		return shootout(p.Seed, p.Squads)
 	}
-	return game.SimulateSeed(p.Seed, p.Squads, effectiveOrders(lb, p), halves)
+	return simulate(p.Seed, p.Squads, effectiveOrders(lb, p), halves)
 }
 
 // effectiveOrders fills in the half-time order of bots and ghosts, which is a
@@ -274,8 +274,12 @@ func (s *Server) advanceLobby(ctx context.Context, lb *store.Lobby, now time.Tim
 					return err
 				}
 				dirty := false
-				if lb.Seats[seat].Bot {
+				// A bot shops once per round. Another server may have done it
+				// already and then lost the race to save the lobby; shopping
+				// again would give the bot a second transfer window.
+				if lb.Seats[seat].Bot && run.BotRound < lb.Round {
 					run.BotManage(g)
+					run.BotRound = lb.Round
 					dirty = true
 				}
 				if run.Deadline() {
@@ -411,6 +415,9 @@ func (s *Server) saveLobby(ctx context.Context, lb *store.Lobby) error {
 	if err := s.st.SaveLobby(ctx, lb); err != nil {
 		return err
 	}
+	if len(rate) > 0 && lb.Ranked {
+		s.ensureSeason(ctx)
+	}
 	for _, i := range rate {
 		st := lb.Seats[i]
 		if lb.Ranked {
@@ -427,12 +434,25 @@ func (s *Server) saveLobby(ctx context.Context, lb *store.Lobby) error {
 		if lb.Ranked {
 			d["ranked"] = 1
 		}
-		if run, err := s.st.GetRun(ctx, lobbyRunKey(lb.ID, i)); err == nil {
+		mode := "normal"
+		switch {
+		case lb.Ranked:
+			mode = "ranked"
+		case lb.Host != "":
+			mode = "friends"
+		}
+		g := store.GameRecord{UserID: st.UserID, Mode: mode, Place: st.Place, Of: len(lb.Seats)}
+		if lb.Ranked {
+			g.Points = st.LPChange
+		}
+		run, err := s.st.GetRun(ctx, lobbyRunKey(lb.ID, i))
+		if err == nil {
 			addMatches(d, run)
+		} else {
+			run = nil
 		}
-		if err := s.st.AddStats(ctx, st.UserID, d); err != nil {
-			s.log.Error("stats update failed", "err", err)
-		}
+		s.recordGame(ctx, g, run)
+		s.recordStats(ctx, st.UserID, d)
 	}
 	return nil
 }
@@ -440,13 +460,9 @@ func (s *Server) saveLobby(ctx context.Context, lb *store.Lobby) error {
 // addMatches adds the matches of a finished live club to a stats delta.
 func addMatches(d map[string]int, run *game.Run) {
 	for _, h := range run.History {
-		d["matches"]++
-		d["gf"] += h.GF
-		d["ga"] += h.GA
-		if h.Won {
-			d["wins"]++
-		}
+		matchStats(d, h)
 	}
+	gameStats(d, run)
 }
 
 // finishIfDecided ends the lobby as soon as at most one manager is left: he
@@ -596,6 +612,7 @@ type rankedView struct {
 	Waited  int64         `json:"waitedMs"` // how long this manager has been searching
 	Spread  int           `json:"spread"`   // ranked search: points either side accepted right now, -1 for anyone
 	Tiers   []tier        `json:"tiers"`
+	Season  seasonView    `json:"season"`
 	Party   *partyView    `json:"party"`   // the friends lobby the manager is gathering in
 	Invites []partyInvite `json:"invites"` // friends lobbies the manager is invited to
 	LobbyID string        `json:"lobbyId"` // set when the manager sits in a live lobby
@@ -613,12 +630,13 @@ type rankedView struct {
 
 func (s *Server) rankedGet(w http.ResponseWriter, r *http.Request, uid string) {
 	now := time.Now()
+	season := s.season(r.Context())
 	me, err := s.st.UserByID(r.Context(), uid)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	v := rankedView{Name: me.Name, Rating: max(0, baseRating+me.LP), Tier: tierOf(max(0, baseRating+me.LP)), Games: me.Games}
+	v := rankedView{Season: season, Name: me.Name, Rating: max(0, baseRating+me.LP), Tier: tierOf(max(0, baseRating+me.LP)), Games: me.Games}
 	if lb := s.playingLobby(r.Context(), uid); lb != nil {
 		v.LobbyID = lb.ID
 	} else {
@@ -670,7 +688,7 @@ func (s *Server) rankedGet(w http.ResponseWriter, r *http.Request, uid string) {
 	}
 	v.Tiers = tiers
 	v.Party, v.Invites = s.partyState(r, uid)
-	top, _ := s.st.TopRated(r.Context(), 10)
+	top := s.topTen(r.Context())
 	for _, u := range top {
 		v.Top = append(v.Top, struct {
 			Name   string `json:"name"`
@@ -784,6 +802,7 @@ type rankRow struct {
 // are returned, plus the caller's own row when he is further down.
 func (s *Server) ranking(w http.ResponseWriter, r *http.Request, uid string) {
 	ctx := r.Context()
+	s.ensureSeason(ctx)
 	me, err := s.st.UserByID(ctx, uid)
 	if err != nil {
 		writeErr(w, http.StatusUnauthorized, "Please sign in.")
@@ -810,7 +829,9 @@ func (s *Server) ranking(w http.ResponseWriter, r *http.Request, uid string) {
 			return
 		}
 		for _, u := range byID {
-			users = append(users, *u)
+			if !u.Hidden() {
+				users = append(users, *u)
+			}
 		}
 		sort.Slice(users, func(a, b int) bool {
 			return users[a].LP > users[b].LP || (users[a].LP == users[b].LP && users[a].Name < users[b].Name)

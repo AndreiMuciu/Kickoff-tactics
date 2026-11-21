@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,8 +47,79 @@ type User struct {
 	// Plan is the manager's team plan: the players (ids) he wants to end up with.
 	Plan []string `bson:"plan,omitempty"`
 	// Stats are plain counters (matches, wins, gf, ga, seasons, titles, lobbies,
-	// lobbyWins, lobbyTop4, placeSum, ranked, series, seriesWins).
+	// lobbyWins, lobbyTop4, placeSum, ranked, series, seriesWins, cleanSheets,
+	// bigWins, perfectSeasons, streak5, threeStars, fullStadiums, feedback).
 	Stats map[string]int
+	// Achieved holds when each achievement was unlocked, by id.
+	Achieved map[string]time.Time `bson:"achieved,omitempty"`
+	// AchSeen is when the manager last looked at his achievements; newer ones are shown as new.
+	AchSeen time.Time `bson:"achseen,omitempty"`
+	// Ranked seasons: the season the points belong to (0 for accounts older
+	// than seasons, which count as season 1), ranked lobbies finished in it,
+	// and the badge earned in every past season played.
+	Season      int           `bson:"season,omitempty"`
+	SeasonGames int           `bson:"seasongames,omitempty"`
+	Badges      []SeasonBadge `bson:"badges,omitempty"`
+	// DeletedAt is when the manager asked to delete his account. For the
+	// grace period the account is hidden but kept, name included, and signing
+	// in restores it. Purged: the personal data has been erased.
+	DeletedAt time.Time `bson:"deletedat,omitempty"`
+	Purged    bool      `bson:"purged,omitempty"`
+}
+
+// Hidden reports whether the account is deleted or waiting to be.
+func (u *User) Hidden() bool { return !u.DeletedAt.IsZero() }
+
+// SeasonBadge is the division a manager finished a ranked season in.
+type SeasonBadge struct {
+	Season int    `json:"season" bson:"season"`
+	Tier   string `json:"tier" bson:"tier"`
+	Points int    `json:"points" bson:"points"`
+}
+
+// TierMin is a division and the points it starts at, for season resets.
+type TierMin struct {
+	Name string
+	Min  int
+}
+
+// MatchLine is one match of a finished game, as kept in the match history.
+type MatchLine struct {
+	Round    int    `json:"round" bson:"round"`
+	Opponent string `json:"opponent" bson:"opponent"`
+	GF       int    `json:"gf" bson:"gf"`
+	GA       int    `json:"ga" bson:"ga"`
+	Pens     bool   `json:"pens,omitempty" bson:"pens,omitempty"`
+	Won      bool   `json:"won" bson:"won"`
+}
+
+// GameRecord is one finished game in a manager's history: a solo season, a
+// lobby or a series against a friend, with every match it contained.
+type GameRecord struct {
+	ID       string      `json:"id" bson:"_id"`
+	UserID   string      `json:"-" bson:"userid"`
+	At       time.Time   `json:"-" bson:"at"`
+	Mode     string      `json:"mode" bson:"mode"` // solo | ranked | normal | friends | series
+	Season   int         `json:"season,omitempty" bson:"season,omitempty"`
+	Result   string      `json:"result" bson:"result"` // solo: champion|europe|survived|sacked; series: won|lost; lobby: empty (see Place)
+	Place    int         `json:"place,omitempty" bson:"place,omitempty"`
+	Of       int         `json:"of,omitempty" bson:"of,omitempty"`
+	Points   int         `json:"points,omitempty" bson:"points,omitempty"` // ranked: points won or lost
+	Opponent string      `json:"opponent,omitempty" bson:"opponent,omitempty"`
+	Wins     int         `json:"wins" bson:"wins"`
+	Losses   int         `json:"losses" bson:"losses"`
+	Matches  []MatchLine `json:"matches" bson:"matches"`
+}
+
+// Feedback is a suggestion or bug report sent from inside the game.
+type Feedback struct {
+	ID     string    `bson:"_id"`
+	UserID string    `bson:"userid"`
+	Name   string    `bson:"name"`
+	Kind   string    `bson:"kind"` // idea | bug | other
+	Text   string    `bson:"text"`
+	Screen string    `bson:"screen"` // where in the game it was sent from
+	At     time.Time `bson:"at"`
 }
 
 // Token is a single-use secret mailed to a user: "verify" confirms an address,
@@ -201,6 +273,25 @@ type Store interface {
 	SetPlan(ctx context.Context, id string, plan []string) error
 	// AddStats adds to the user's counters.
 	AddStats(ctx context.Context, id string, delta map[string]int) error
+	// SetAchieved records newly unlocked achievements (id -> when).
+	SetAchieved(ctx context.Context, id string, got map[string]time.Time) error
+	// SetAchSeen marks every achievement unlocked until `at` as seen.
+	SetAchSeen(ctx context.Context, id string, at time.Time) error
+
+	// AddGame stores a finished game in the user's match history.
+	AddGame(ctx context.Context, g *GameRecord) error
+	// ListGames returns one page of the user's games, newest first, and how many he has in all.
+	ListGames(ctx context.Context, userID string, skip, limit int) ([]GameRecord, int, error)
+	AddFeedback(ctx context.Context, f *Feedback) error
+
+	// SetDeleted marks the account as deleted at `at`; a zero time restores it.
+	SetDeleted(ctx context.Context, id string, at time.Time) error
+	// DueForPurge lists accounts deleted before `before` whose data is not erased yet.
+	DueForPurge(ctx context.Context, before time.Time, limit int) ([]User, error)
+	// PurgeUser erases a deleted account: its own data goes, its name in other
+	// managers' history becomes `anon`, its feedback stays without a name, and
+	// a stub with `anon` is all that is left of the user. Safe to run twice.
+	PurgeUser(ctx context.Context, u *User, anon string) error
 
 	PutToken(ctx context.Context, t *Token) error
 	// TakeToken returns the token and deletes it in one step, so it works once.
@@ -241,6 +332,11 @@ type Store interface {
 	SaveQueue(ctx context.Context, q *Queue) error // optimistic
 	// AddRating adds ranked points to a user (never below zero) and counts one finished lobby.
 	AddRating(ctx context.Context, userID string, delta int) error
+	// RollSeason moves every manager still in an older season into season
+	// `to`: who played ranked in the season just ended gets its badge, and
+	// everyone keeps half his points. Safe to run again or from several
+	// servers at once: a manager already in `to` is left alone.
+	RollSeason(ctx context.Context, to int, tiers []TierMin) error
 	// TopRated returns every manager ordered by points, best first, up to n.
 	TopRated(ctx context.Context, n int) ([]User, error)
 	// RankInfo returns how many managers have more than lp points, and how many managers exist.
@@ -273,6 +369,8 @@ type Memory struct {
 	queues   map[string]Queue
 	byEmail  map[string]string
 	tokens   map[string]Token
+	games    []GameRecord // newest last
+	feedback []Feedback
 }
 
 func NewMemory() *Memory {
@@ -362,6 +460,155 @@ func (m *Memory) SetPlan(_ context.Context, id string, plan []string) error {
 	}
 	u.Plan = append([]string{}, plan...)
 	m.users[id] = u
+	return nil
+}
+
+func (m *Memory) SetAchieved(_ context.Context, id string, got map[string]time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.users[id]
+	if !ok {
+		return ErrNotFound
+	}
+	a := map[string]time.Time{}
+	for k, v := range u.Achieved {
+		a[k] = v
+	}
+	for k, v := range got {
+		if _, had := a[k]; !had {
+			a[k] = v
+		}
+	}
+	u.Achieved = a
+	m.users[id] = u
+	return nil
+}
+
+func (m *Memory) SetAchSeen(_ context.Context, id string, at time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.users[id]
+	if !ok {
+		return ErrNotFound
+	}
+	u.AchSeen = at
+	m.users[id] = u
+	return nil
+}
+
+func (m *Memory) AddGame(_ context.Context, g *GameRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.games = append(m.games, *g)
+	return nil
+}
+
+func (m *Memory) ListGames(_ context.Context, userID string, skip, limit int) ([]GameRecord, int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var mine []GameRecord
+	for i := len(m.games) - 1; i >= 0; i-- {
+		if m.games[i].UserID == userID {
+			mine = append(mine, m.games[i])
+		}
+	}
+	total := len(mine)
+	if skip >= total {
+		return []GameRecord{}, total, nil
+	}
+	return mine[skip:min(total, skip+limit)], total, nil
+}
+
+func (m *Memory) SetDeleted(_ context.Context, id string, at time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.users[id]
+	if !ok {
+		return ErrNotFound
+	}
+	u.DeletedAt = at
+	m.users[id] = u
+	return nil
+}
+
+func (m *Memory) DueForPurge(_ context.Context, before time.Time, limit int) ([]User, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []User
+	for _, u := range m.users {
+		if u.Hidden() && !u.Purged && u.DeletedAt.Before(before) && len(out) < limit {
+			out = append(out, u)
+		}
+	}
+	return out, nil
+}
+
+func (m *Memory) PurgeUser(_ context.Context, u *User, anon string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cur, ok := m.users[u.ID]
+	if !ok || cur.Purged {
+		return nil
+	}
+	games := m.games[:0:0]
+	for _, g := range m.games {
+		if g.UserID == u.ID {
+			continue
+		}
+		if g.Opponent == cur.Name {
+			g.Opponent = anon
+		}
+		ms := append([]MatchLine(nil), g.Matches...)
+		for i := range ms {
+			if ms[i].Opponent == cur.Name {
+				ms[i].Opponent = anon
+			}
+		}
+		g.Matches = ms
+		games = append(games, g)
+	}
+	m.games = games
+	delete(m.runs, u.ID)
+	for k := range m.runs {
+		if strings.HasPrefix(k, "vs:") && strings.HasSuffix(k, ":"+u.ID) {
+			delete(m.runs, k)
+		}
+	}
+	for k, f := range m.friends {
+		if f.A == u.ID || f.B == u.ID {
+			delete(m.friends, k)
+			delete(m.messages, k)
+		}
+	}
+	for i := range m.feedback {
+		if m.feedback[i].UserID == u.ID {
+			m.feedback[i].UserID, m.feedback[i].Name = "", ""
+		}
+	}
+	for k, v := range m.sessions {
+		if v.user == u.ID {
+			delete(m.sessions, k)
+		}
+	}
+	for k, v := range m.tokens {
+		if v.UserID == u.ID {
+			delete(m.tokens, k)
+		}
+	}
+	delete(m.byName, cur.NameKey)
+	if cur.EmailKey != "" {
+		delete(m.byEmail, cur.EmailKey)
+	}
+	stub := User{ID: u.ID, Name: anon, NameKey: "deleted:" + u.ID, CreatedAt: cur.CreatedAt, DeletedAt: cur.DeletedAt, Purged: true}
+	m.users[u.ID] = stub
+	m.byName[stub.NameKey] = u.ID
+	return nil
+}
+
+func (m *Memory) AddFeedback(_ context.Context, f *Feedback) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.feedback = append(m.feedback, *f)
 	return nil
 }
 
@@ -732,12 +979,44 @@ func (m *Memory) SaveQueue(_ context.Context, q *Queue) error {
 	return nil
 }
 
+func TierAt(points int, tiers []TierMin) string {
+	name := ""
+	for _, t := range tiers {
+		if points >= t.Min {
+			name = t.Name
+		}
+	}
+	return name
+}
+
+func (m *Memory) RollSeason(_ context.Context, to int, tiers []TierMin) error {
+	if to < 2 {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id, u := range m.users {
+		if u.Season >= to {
+			continue
+		}
+		if u.SeasonGames > 0 {
+			u.Badges = append(append([]SeasonBadge(nil), u.Badges...), SeasonBadge{Season: to - 1, Tier: TierAt(u.LP, tiers), Points: u.LP})
+		}
+		u.LP /= 2
+		u.SeasonGames = 0
+		u.Season = to
+		m.users[id] = u
+	}
+	return nil
+}
+
 func (m *Memory) AddRating(_ context.Context, userID string, delta int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if u, ok := m.users[userID]; ok {
 		u.LP = max(0, u.LP+delta)
 		u.Games++
+		u.SeasonGames++
 		m.users[userID] = u
 	}
 	return nil
@@ -746,13 +1025,17 @@ func (m *Memory) AddRating(_ context.Context, userID string, delta int) error {
 func (m *Memory) RankInfo(_ context.Context, lp int) (int, int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	above := 0
+	above, total := 0, 0
 	for _, u := range m.users {
+		if u.Hidden() {
+			continue
+		}
+		total++
 		if u.LP > lp {
 			above++
 		}
 	}
-	return above, len(m.users), nil
+	return above, total, nil
 }
 
 func (m *Memory) TopRated(_ context.Context, n int) ([]User, error) {
@@ -760,7 +1043,9 @@ func (m *Memory) TopRated(_ context.Context, n int) ([]User, error) {
 	defer m.mu.Unlock()
 	var out []User
 	for _, u := range m.users {
-		out = append(out, u)
+		if !u.Hidden() {
+			out = append(out, u)
+		}
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].LP > out[j].LP || (out[i].LP == out[j].LP && out[i].Name < out[j].Name)

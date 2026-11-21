@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	netmail "net/mail"
 	"os"
 	"os/signal"
 	"strconv"
@@ -77,9 +78,14 @@ func main() {
 	defer b.Close()
 	log.Info("bus ready", "kind", b.Name())
 
+	game := api.New(st, api.Config{AllowedOrigins: origins, CookieSecure: os.Getenv("COOKIE_SECURE") == "true", Mailer: mailer, PublicURL: publicURL, FeedbackTo: feedbackTo(), Bus: b, TrustProxy: os.Getenv("TRUST_PROXY") == "true"}, log)
+	janitor, stopJanitor := context.WithCancel(context.Background())
+	defer stopJanitor()
+	go game.Janitor(janitor)
+
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           api.New(st, api.Config{AllowedOrigins: origins, CookieSecure: os.Getenv("COOKIE_SECURE") == "true", Mailer: mailer, PublicURL: publicURL, Bus: b, TrustProxy: os.Getenv("TRUST_PROXY") == "true"}, log).Handler(),
+		Handler:           game.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -102,4 +108,14 @@ func main() {
 	defer cancel()
 	_ = srv.Shutdown(ctx)
 	_ = st.Close(ctx)
+}
+
+// feedbackTo is where in-game feedback is mailed: FEEDBACK_TO, or else the
+// bare address of MAIL_FROM ("Kickoff Tactics <contact@...>" gives contact@...).
+func feedbackTo() string {
+	v := env("FEEDBACK_TO", os.Getenv("MAIL_FROM"))
+	if a, err := netmail.ParseAddress(v); err == nil {
+		return a.Address
+	}
+	return v
 }

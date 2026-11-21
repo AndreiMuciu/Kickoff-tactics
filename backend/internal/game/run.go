@@ -70,6 +70,7 @@ type HistoryEntry struct {
 	Won      bool   `json:"won"`
 	Damage   int    `json:"damage"`
 	Income   int    `json:"income"`
+	Note     string `json:"note,omitempty"` // what came of a promise made before the match
 	Seed     string `json:"seed"`
 	Commit   string `json:"commit"`
 }
@@ -102,6 +103,14 @@ type Run struct {
 	FreeReroll   bool
 	Augments     []string
 	AugmentOffer []string // the augments to choose from in this window, if any
+	// Solo story: the club event waiting for an answer, the events already
+	// seen this season, the answers given, and a promise still to be judged.
+	Event       string   `bson:",omitempty"`
+	EventsSeen  []string `bson:",omitempty"`
+	EventChoice []int    `bson:",omitempty"`
+	Pledge      string   `bson:",omitempty"`
+	// BotRound is the last lobby round in which a bot club did its shopping.
+	BotRound int `bson:",omitempty"`
 }
 
 type Action struct {
@@ -181,11 +190,21 @@ func (r *Run) rollShop(g *RNG) {
 
 var clubNames = [MaxRounds]string{"Sunday League FC", "Car Park Rovers", "Garage Athletic", "Kiosk United", "Stairwell Sporting", "Roundabout Olympic", "Valley Galacticos", "Imperial XI"}
 
+// The solo opponents, fixture by fixture: outfield players, the dearest
+// player they may field, and the chance (%) of a two-star player. Tuned with
+// TestBalanceSoloSeason.
+var (
+	soloCount   = [MaxRounds]int{1, 1, 2, 3, 4, 4, 5, 6}
+	soloMaxCost = [MaxRounds]int{1, 1, 2, 2, 3, 3, 4, 4}
+	soloStar2   = [MaxRounds]int{0, 0, 15, 25, 30, 40, 50, 60}
+	soloStar3   = 10 // fixtures 7-8: chance (%) that a cheap player has three stars
+)
+
 func genOpponent(g *RNG, round int) Opponent {
 	i := round - 1
-	count := [MaxRounds]int{1, 2, 3, 3, 4, 5, 6, 7}[i]
-	maxCost := [MaxRounds]int{1, 1, 2, 2, 3, 3, 4, 5}[i]
-	star2 := [MaxRounds]int{0, 10, 20, 30, 45, 55, 70, 85}[i]
+	count := soloCount[i]
+	maxCost := soloMaxCost[i]
+	star2 := soloStar2[i]
 	var styles []string
 	for _, sy := range Synergies {
 		if sy.Kind == "style" {
@@ -255,7 +274,7 @@ func genOpponent(g *RNG, round int) Opponent {
 		if g.Intn(100) < star2 {
 			stars = 2
 		}
-		if round >= 7 && d.Cost <= 2 && g.Intn(100) < 25 {
+		if round >= 7 && d.Cost <= 2 && g.Intn(100) < soloStar3 {
 			stars = 3
 		}
 		op.Units = append(op.Units, Unit{UID: fmt.Sprintf("o%d", n), Def: id, Stars: stars, Line: line, Lane: lane})
@@ -503,6 +522,8 @@ func (r *Run) Apply(a Action) error {
 		r.Locked = !r.Locked
 	case "augment":
 		return r.chooseAugment(a.Slot)
+	case "story":
+		return r.chooseStory(a.Slot)
 	case "levelup":
 		if r.Level >= MaxLevel {
 			return rule("The stadium is already at maximum level.")
@@ -556,6 +577,11 @@ func (r *Run) Deadline() bool {
 func (r *Run) StartMatch() (*SimResult, error) {
 	if r.Phase != "shop" {
 		return nil, rule("The match cannot start right now.")
+	}
+	// A club event left unanswered takes its first answer, or the second
+	// when the first is not affordable.
+	if r.Event != "" && r.chooseStory(0) != nil {
+		_ = r.chooseStory(1)
 	}
 	r.Deadline()
 	my := r.myLineup()
@@ -621,6 +647,8 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 	res := Simulate(seed, lus, [2][2]string{{"balanced", tactic}, {"balanced", bot}}, 2)
 
 	h := HistoryEntry{Round: r.Round, Opponent: r.Opponent.Name, GF: res.Score[0], GA: res.Score[1], Pens: len(res.Pens) > 0, Won: res.Winner == 0, Seed: r.Match.Seed, Commit: r.Match.Commit}
+	extra, note := r.settlePledge(h.Won, h.GF, h.GA)
+	h.Note = note
 	if h.Won {
 		r.Wins++
 		if r.Streak < 0 {
@@ -633,7 +661,7 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 			r.Streak = 0
 		}
 		r.Streak--
-		h.Damage = r.lessened(SoloDamage(r.Round, res.Score[1]-res.Score[0]))
+		h.Damage = r.lessened(SoloDamage(r.Round, res.Score[1]-res.Score[0])) + extra
 		r.Patience -= h.Damage
 	}
 	r.Match = nil
@@ -661,6 +689,7 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 		r.withRNG(func(g *RNG) {
 			r.nextWindow(g)
 			r.Opponent = genOpponent(g, r.Round)
+			r.offerStory(g)
 		})
 	}
 	r.History = append(r.History, h)
@@ -697,7 +726,9 @@ type RunView struct {
 	InterestMax  int            `json:"interestMax"`
 	Augments     []string       `json:"augments"`
 	AugmentOffer []string       `json:"augmentOffer"`
-	LossCost     [2]int         `json:"lossCost"` // patience a defeat in the next match costs: by one goal, by three or more
+	LossCost     [2]int         `json:"lossCost"`         // patience a defeat in the next match costs: by one goal, by three or more
+	Event        *StoryEvent    `json:"event,omitempty"`  // solo: the club event waiting for an answer
+	Pledge       string         `json:"pledge,omitempty"` // solo: a promise the next match will judge
 }
 
 func (r *Run) View() RunView {
@@ -712,6 +743,7 @@ func (r *Run) View() RunView {
 		Augments: r.Augments, AugmentOffer: r.AugmentOffer,
 		LossCost: [2]int{r.lessened(SoloDamage(r.Round, 1)), r.lessened(SoloDamage(r.Round, 3))},
 	}
+	v.Event, v.Pledge = r.storyView(), r.Pledge
 	if v.Augments == nil {
 		v.Augments = []string{}
 	}

@@ -124,12 +124,18 @@ func (s *Server) finishSeries(ctx context.Context, sr *store.Series, note string
 		if sr.Winner == i {
 			d["seriesWins"] = 1
 		}
-		if run, err := s.st.GetRun(ctx, seriesRunKey(sr.ID, uid)); err == nil {
+		g := store.GameRecord{UserID: uid, Mode: "series", Result: "lost", Opponent: names[1-i]}
+		if sr.Winner == i {
+			g.Result = "won"
+		}
+		run, err := s.st.GetRun(ctx, seriesRunKey(sr.ID, uid))
+		if err == nil {
 			addMatches(d, run)
+		} else {
+			run = nil
 		}
-		if err := s.st.AddStats(ctx, uid, d); err != nil {
-			s.log.Error("stats update failed", "err", err)
-		}
+		s.recordGame(ctx, g, run)
+		s.recordStats(ctx, uid, d)
 	}
 }
 
@@ -176,7 +182,7 @@ func (s *Server) advance(ctx context.Context, sr *store.Series, now time.Time) e
 			sr.Frozen, changed = true, true
 			continue
 		case sr.Frozen && !sr.Settled && !now.Before(c.matchEnd):
-			res, err := game.SimulateSeed(sr.Seed, sr.Squads, sr.Orders, 2)
+			res, err := simulate(sr.Seed, sr.Squads, sr.Orders, 2)
 			if err != nil {
 				return err
 			}
@@ -629,7 +635,7 @@ func (s *Server) seriesGet(w http.ResponseWriter, r *http.Request, uid string) {
 		writeJSON(w, 200, v)
 		return
 	}
-	res, err := game.SimulateSeed(sr.Seed, sr.Squads, sr.Orders, halves)
+	res, err := simulate(sr.Seed, sr.Squads, sr.Orders, halves)
 	if err != nil {
 		s.fail(w, r, err)
 		return

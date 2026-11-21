@@ -7,7 +7,7 @@ interface Props {
   invitedBy: string | null
   resetToken: string | null // set when the page was opened from a "reset your password" mail
   onResetDone: () => void
-  onDone: () => void
+  onDone: (restored?: boolean) => void // restored: signing in cancelled a pending account deletion
 }
 
 export default function Auth({ invitedBy, resetToken, onResetDone, onDone }: Props) {
@@ -50,10 +50,10 @@ export default function Auth({ invitedBy, resetToken, onResetDone, onDone }: Pro
         setMode('login')
         setInfo('Password changed. Log in with the new one.')
       } else {
-        await (mode === 'signup' ? api.signup(username, email, password) : api.login(username, password))
+        const r = mode === 'signup' ? await api.signup(username, email, password) : await api.login(username, password)
         setPassword('')
         setConfirm('')
-        onDone()
+        onDone('restored' in r && !!r.restored)
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "We can't reach the game right now. Try again in a moment.")

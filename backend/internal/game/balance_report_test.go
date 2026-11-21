@@ -314,7 +314,7 @@ func TestBalanceCostAndStars(t *testing.T) {
 // buys the dearest player he can afford, completes merges, levels up when rich.
 func TestBalanceSoloSeason(t *testing.T) {
 	skipUnlessReport(t)
-	results, reached := map[string]int{}, [MaxRounds + 1]int{}
+	results, reached, won := map[string]int{}, [MaxRounds + 1]int{}, [MaxRounds + 1]int{}
 	const n = 400
 	for k := 0; k < n; k++ {
 		r, err := NewRun(fmt.Sprintf("solo-%d", k))
@@ -328,12 +328,22 @@ func TestBalanceSoloSeason(t *testing.T) {
 			if _, err := r.StartMatch(); err != nil {
 				t.Fatal(err)
 			}
-			if _, _, err := r.FinishMatch("balanced"); err != nil {
+			round := r.Round
+			_, h, err := r.FinishMatch("balanced")
+			if err != nil {
 				t.Fatal(err)
+			}
+			if h.Won {
+				won[round]++
 			}
 		}
 		results[r.Result]++
 	}
 	t.Logf("results of %d seasons: %v", n, results)
 	t.Logf("seasons that reached each fixture: %v", reached[1:])
+	rates := make([]string, 0, MaxRounds)
+	for i := 1; i <= MaxRounds; i++ {
+		rates = append(rates, fmt.Sprintf("%d%%", 100*won[i]/max(reached[i], 1)))
+	}
+	t.Logf("win rate per fixture: %v", rates)
 }

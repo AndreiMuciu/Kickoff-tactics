@@ -206,20 +206,52 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 // ---- profile ----
 
 func (s *Server) profile(w http.ResponseWriter, r *http.Request, uid string) {
+	season := s.season(r.Context())
 	u, err := s.st.UserByID(r.Context(), uid)
 	if err != nil {
 		writeErr(w, http.StatusUnauthorized, "Please sign in.")
 		return
 	}
+	// Another manager's profile: friends only, and without private details.
+	if name := r.URL.Query().Get("name"); name != "" && !strings.EqualFold(name, u.Name) {
+		other, err := s.st.UserByName(r.Context(), strings.ToLower(name))
+		var f *store.Friendship
+		if err == nil {
+			f, err = s.st.GetFriendship(r.Context(), store.PairID(uid, other.ID))
+		}
+		if err != nil || !f.Accepted || other.Hidden() {
+			writeErr(w, http.StatusNotFound, "You can only see the profiles of your friends.")
+			return
+		}
+		v := publicProfile(other, season)
+		for i := range v["achievements"].([]achievementView) {
+			v["achievements"].([]achievementView)[i].New = false
+		}
+		v["friend"] = true
+		writeJSON(w, 200, v)
+		return
+	}
+	v := publicProfile(u, season)
+	v["email"], v["verified"] = u.Email, u.Verified
+	writeJSON(w, 200, v)
+}
+
+// publicProfile is what any friend may see of a manager.
+func publicProfile(u *store.User, season seasonView) map[string]any {
 	stats := map[string]int{}
 	for k, v := range u.Stats {
 		stats[k] = v
 	}
 	rating := max(0, baseRating+u.LP)
-	writeJSON(w, 200, map[string]any{
-		"name": u.Name, "email": u.Email, "verified": u.Verified, "since": u.CreatedAt.UnixMilli(),
+	badges := u.Badges
+	if badges == nil {
+		badges = []store.SeasonBadge{}
+	}
+	return map[string]any{
+		"name": u.Name, "since": u.CreatedAt.UnixMilli(),
 		"points": rating, "tier": tierOf(rating), "rankedLobbies": u.Games, "stats": stats,
-	})
+		"achievements": achievementViews(u), "season": season, "seasonLobbies": u.SeasonGames, "badges": badges,
+	}
 }
 
 func (s *Server) currentSession(r *http.Request) string {

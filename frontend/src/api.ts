@@ -80,6 +80,18 @@ export interface HistoryEntry {
   income: number
   seed: string
   commit: string
+  note?: string // what came of a promise made before the match
+}
+export interface StoryChoice {
+  label: string
+  effect: string
+  cost?: number
+}
+export interface StoryEvent {
+  id: string
+  title: string
+  text: string
+  choices: StoryChoice[]
 }
 export interface RunView {
   phase: 'shop' | 'halftime' | 'ended'
@@ -111,6 +123,8 @@ export interface RunView {
   augments?: string[]
   augmentOffer?: string[]
   lossCost?: [number, number] // patience a defeat in the next match costs: by one goal, by three or more
+  event?: StoryEvent // solo: a club event waiting for an answer
+  pledge?: string // solo: a promise the next match will judge (win | big_win | clean)
 }
 export interface RosterEntry {
   idx: number
@@ -150,6 +164,7 @@ export interface MatchData {
 export interface HalfData extends MatchData {
   result?: HistoryEntry
   run: RunView
+  unlocked?: Achievement[] // achievements this match unlocked
 }
 export type Action =
   | { type: 'buy'; slot: number; def: string }
@@ -159,6 +174,7 @@ export type Action =
   | { type: 'levelup' }
   | { type: 'lock' }
   | { type: 'augment'; slot: number }
+  | { type: 'story'; slot: number }
 
 export interface SeasonSummary {
   phase: 'shop' | 'halftime' | 'ended'
@@ -175,16 +191,71 @@ export interface Me {
   verified: boolean
   hasSquad: boolean
   season: SeasonSummary | null
+  newAchievements: number
+}
+export interface Achievement {
+  id: string
+  icon: string
+  name: string
+  desc: string
+  target: number
+}
+export interface AchievementView extends Achievement {
+  progress: number
+  at?: number // unlock time (ms); absent while locked
+  new?: boolean
+}
+export interface RankedSeason {
+  number: number
+  endsAt: number
+}
+export interface SeasonBadge {
+  season: number
+  tier: string
+  points: number
 }
 export interface ProfileView {
   name: string
-  email: string
-  verified: boolean
+  email?: string // own profile only
+  verified?: boolean
+  friend?: boolean // a friend's profile, read-only
   since: number
   points: number
   tier: string
   rankedLobbies: number
   stats: Record<string, number>
+  achievements: AchievementView[]
+  season: RankedSeason
+  seasonLobbies: number
+  badges: SeasonBadge[]
+}
+export interface MatchLine {
+  round: number
+  opponent: string
+  gf: number
+  ga: number
+  pens?: boolean
+  won: boolean
+}
+export interface GameRecord {
+  id: string
+  at: number
+  mode: 'solo' | 'ranked' | 'normal' | 'friends' | 'series'
+  season?: number
+  result: string
+  place?: number
+  of?: number
+  points?: number
+  opponent?: string
+  wins: number
+  losses: number
+  matches: MatchLine[]
+}
+export interface HistoryPage {
+  games: GameRecord[]
+  page: number
+  pages: number
+  total: number
 }
 export interface Friend {
   name: string
@@ -304,6 +375,7 @@ export interface Ranking {
   myRank: number
 }
 export interface RankedView {
+  season: RankedSeason
   name: string
   rating: number
   tier: string
@@ -351,11 +423,16 @@ export const api = {
   verify: (token: string) => call<{ ok: boolean }>('POST', '/api/auth/verify', { token }),
   forgot: (email: string) => call<{ ok: boolean }>('POST', '/api/auth/forgot', { email }),
   reset: (token: string, password: string) => call<{ name: string }>('POST', '/api/auth/reset', { token, password }),
-  profile: () => call<ProfileView>('GET', '/api/profile'),
+  profile: (name?: string) => call<ProfileView>('GET', name ? `/api/profile?name=${encodeURIComponent(name)}` : '/api/profile'),
+  history: (page: number) => call<HistoryPage>('GET', `/api/history?page=${page}`),
+  achievementsSeen: () => call<{ ok: boolean }>('POST', '/api/achievements/seen', {}),
+  feedback: (kind: 'idea' | 'bug' | 'other', text: string, screen: string) =>
+    call<{ ok: boolean; unlocked: Achievement[] }>('POST', '/api/feedback', { kind, text, screen }),
   changePassword: (current: string, next: string) => call<{ ok: boolean }>('POST', '/api/profile/password', { current, new: next }),
   changeEmail: (email: string, password: string) => call<{ ok: boolean }>('POST', '/api/profile/email', { email, password }),
   resendVerify: () => call<{ ok: boolean }>('POST', '/api/profile/resend', {}),
-  login: (username: string, password: string) => call<{ name: string }>('POST', '/api/auth/login', { username, password }),
+  login: (username: string, password: string) => call<{ name: string; restored?: boolean }>('POST', '/api/auth/login', { username, password }),
+  deleteAccount: (password: string) => call<{ ok: boolean; purgeAt: number }>('POST', '/api/profile/delete', { password }),
   logout: () => call<{ ok: boolean }>('POST', '/api/auth/logout', {}),
   me: () => call<Me>('GET', '/api/me'),
 

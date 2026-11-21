@@ -465,3 +465,75 @@ button.stand:hover { border-color: var(--line); background: var(--panel2); }
 .dialog.top4 h2 { margin: 0; font-size: 24px; }
 .dialog.top4 p { margin: 0; }
 .top4-badge { justify-self: center; font-size: 40px; font-weight: 900; letter-spacing: 4px; color: var(--gold); text-shadow: 0 0 18px rgba(253, 224, 71, .6); animation: pulse-gold 1.6s ease-in-out infinite; border-radius: 12px; padding: 4px 18px; }
+
+/* Profile tabs, achievements, match history, season badges */
+.dialog.profile { max-height: calc(100vh - 32px); overflow: auto; }
+.tabs { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.tabs button { border-radius: 999px; padding: 6px 14px; font-size: 13px; }
+.tabs button.on { background: #b6f23c; color: #0c1a08; border-color: transparent; font-weight: 700; }
+.ach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; text-align: left; }
+.ach { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 4px; align-content: start; opacity: .55; filter: grayscale(.8); }
+.ach.got { opacity: 1; filter: none; border-color: rgba(253, 224, 71, .45); }
+.ach.new { box-shadow: 0 0 0 2px rgba(253, 224, 71, .55), 0 0 18px -4px rgba(253, 224, 71, .6); }
+.ach-icon { font-size: 26px; line-height: 1; }
+.ach b { font-size: 14px; }
+.ach small { color: var(--muted); font-size: 12px; }
+.ach small.ach-when { color: var(--gold); }
+.ach-bar { position: relative; height: 16px; background: var(--panel); border-radius: 999px; overflow: hidden; }
+.ach-bar i { position: absolute; inset: 0 auto 0 0; background: rgba(163, 230, 53, .45); }
+.ach-bar small { position: relative; display: block; text-align: center; font-size: 11px; line-height: 16px; color: var(--text); }
+.ach-dot { margin-left: 6px; background: rgba(253, 224, 71, .18); border: 1px solid rgba(253, 224, 71, .5); border-radius: 999px; padding: 0 7px; font-size: 12px; color: var(--gold); }
+.ach-unlocked { color: var(--gold); font-weight: 600; }
+.history { display: grid; gap: 6px; text-align: left; }
+.game-row { border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); }
+.game-head { width: 100%; display: grid; grid-template-columns: 96px 1fr auto auto 44px 16px; gap: 10px; align-items: center; background: none; border: 0; text-align: left; padding: 8px 12px; }
+.game-when, .game-record { color: var(--muted); font-size: 13px; }
+.game-mode small { color: var(--muted); }
+.game-caret { color: var(--muted); }
+.game-matches { padding: 4px 14px 10px; display: grid; gap: 2px; font-size: 13px; border-top: 1px solid var(--line); }
+.pager { display: flex; gap: 10px; align-items: center; justify-content: center; padding-top: 6px; font-size: 13px; color: var(--muted); }
+.badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.badge { font-size: 12px; }
+.season-line { font-size: 12.5px; color: var(--muted); margin: 0; }
+.season-line b { color: var(--text); }
+.friend-name { padding: 0; border: 0; background: none; color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
+.friend-name:hover { color: var(--gold); }
+@media (max-width: 700px) {
+  .game-head { grid-template-columns: 1fr auto; row-gap: 2px; }
+  .game-head .game-caret { display: none; }
+}
+
+/* Feedback */
+.feedback-fab { position: fixed; left: 14px; bottom: 14px; z-index: 9; border-radius: 999px; padding: 7px 14px; font-size: 13px; background: var(--panel2); box-shadow: 0 6px 20px rgba(0, 0, 0, .45); }
+.feedback-overlay { z-index: 45; }
+.dialog.feedback { width: min(560px, 100%); }
+.dialog.feedback h2 { font-size: 24px; margin: 0; }
+.feedback-text { display: grid; gap: 4px; text-align: right; }
+.feedback-text textarea { width: 100%; resize: vertical; font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-height: 120px; }
+body:has(.cookie-bar) .feedback-fab { bottom: 84px; }
+
+/* Solo story */
+.story-overlay { z-index: 29; }
+.dialog.story { width: min(620px, 100%); background: linear-gradient(160deg, rgba(27, 39, 64, .98), rgba(12, 20, 36, .98)); border-color: rgba(163, 230, 53, .35); animation: pop .3s ease-out; text-align: left; }
+.dialog.story h2 { margin: 0; font-size: 26px; text-align: left; }
+.dialog.story p { margin: 0; line-height: 1.55; }
+.dialog.story .big { justify-self: center; }
+.story-kicker { text-transform: uppercase; letter-spacing: 2px; color: var(--gold); font-size: 11px; }
+.story-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 600px) { .story-choices { grid-template-columns: 1fr; } }
+.story-note { color: var(--gold); font-size: 12px; }
+p.story-note { font-size: 14px; }
+.owner-says { font-style: italic; color: var(--muted); }
+.chip.pledge { border-color: rgba(253, 224, 71, .5); color: var(--gold); }
+.rival { display: grid; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.rival h3 { color: var(--text); }
+.rival p { margin: 0; font-size: 13px; }
+
+/* Account deletion */
+.profile-forms .danger-zone { grid-column: 1 / -1; border: 1px solid rgba(248, 113, 113, .45); border-radius: 12px; padding: 14px; background: rgba(127, 29, 29, .12); }
+.danger-zone h3 { color: var(--bad); }
+.danger-zone .check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.danger-zone .check input { width: auto; }
+button.danger { background: #7f1d1d; border-color: #b91c1c; color: #fee2e2; font-weight: 700; }
+button.danger:hover:not(:disabled) { background: #991b1b; }
+button.danger:disabled { opacity: .5; cursor: not-allowed; }

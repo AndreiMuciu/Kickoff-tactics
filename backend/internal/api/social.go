@@ -102,7 +102,7 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
-	u := &store.User{ID: id, Name: c.Username, NameKey: strings.ToLower(c.Username), PassHash: hash, CreatedAt: now, LastSeen: now, Email: email, EmailKey: emailKey, Stats: map[string]int{}}
+	u := &store.User{ID: id, Name: c.Username, NameKey: strings.ToLower(c.Username), PassHash: hash, CreatedAt: now, LastSeen: now, Email: email, EmailKey: emailKey, Stats: map[string]int{}, Season: seasonAt(now)}
 	if err := s.st.CreateUser(r.Context(), u); err != nil {
 		if errors.Is(err, store.ErrConflict) {
 			writeErr(w, http.StatusConflict, "That username is taken.")
@@ -154,11 +154,20 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, wrong)
 		return
 	}
+	// Signing in during the grace period cancels the deletion.
+	restored := false
+	if u.Hidden() {
+		if err := s.st.SetDeleted(r.Context(), u.ID, time.Time{}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		restored = true
+	}
 	if err := s.startSession(w, r, u.ID); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, 200, map[string]string{"name": u.Name})
+	writeJSON(w, 200, map[string]any{"name": u.Name, "restored": restored})
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +195,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request, uid string) {
 		writeErr(w, http.StatusUnauthorized, "Please sign in.")
 		return
 	}
-	out := map[string]any{"name": u.Name, "season": nil, "hasSquad": false, "hasEmail": u.EmailKey != "", "verified": u.Verified}
+	out := map[string]any{"name": u.Name, "season": nil, "hasSquad": false, "hasEmail": u.EmailKey != "", "verified": u.Verified, "newAchievements": unseenAchievements(u)}
 	if run, err := s.loadRun(r.Context(), uid); err == nil {
 		_, out["hasSquad"] = run.Squad(u.Name)
 		out["season"] = seasonSummary{Phase: run.Phase, Round: run.Round, MaxRounds: game.MaxRounds, Wins: run.Wins, Losses: run.Losses, Patience: run.Patience, Result: run.Result}
@@ -227,6 +236,10 @@ func (s *Server) lookup(w http.ResponseWriter, r *http.Request, uid, name string
 	}
 	if u.ID == uid {
 		writeErr(w, http.StatusUnprocessableEntity, "That is you.")
+		return nil, false
+	}
+	if u.Hidden() { // a deleted account is not there for anybody
+		writeErr(w, http.StatusNotFound, "No manager with that name.")
 		return nil, false
 	}
 	return u, true
@@ -271,7 +284,7 @@ func (s *Server) friends(w http.ResponseWriter, r *http.Request, uid string) {
 	friends, incoming, outgoing := []friendView{}, []string{}, []string{}
 	for _, f := range list {
 		u := users[other(f, uid)]
-		if u == nil {
+		if u == nil || u.Hidden() {
 			continue
 		}
 		switch {

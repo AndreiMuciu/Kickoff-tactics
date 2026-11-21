@@ -37,6 +37,7 @@ type Config struct {
 	CookieSecure   bool
 	Mailer         mail.Mailer
 	PublicURL      string // where the web app is reached; used in mailed links
+	FeedbackTo     string // address that receives in-game feedback; empty: stored only
 	Bus            bus.Bus
 	// TrustProxy: the server sits behind a reverse proxy that appends the real
 	// client address to X-Forwarded-For. Never set it when clients connect directly.
@@ -44,29 +45,34 @@ type Config struct {
 }
 
 type Server struct {
-	st      store.Store
-	cfg     Config
-	origins map[string]bool
-	general *limiter
-	authIP  *limiter // sign-up and login attempts per IP
-	authAcc *limiter // login attempts per account name
-	mailTo  *limiter // mails per address
-	chat    *limiter // messages per user
-	duel    *limiter // live-series invites per user
-	locks   sync.Map // user id -> *sync.Mutex
-	seen    sync.Map // user id -> time.Time of the last "last seen" write
-	hub     *hub     // WebSocket connections held by this instance
-	log     *slog.Logger
+	st       store.Store
+	cfg      Config
+	origins  map[string]bool
+	general  *limiter
+	authIP   *limiter // sign-up and login attempts per IP
+	authAcc  *limiter // login attempts per account name
+	mailTo   *limiter // mails per address
+	chat     *limiter // messages per user
+	duel     *limiter // live-series invites per user
+	feedback *limiter // feedback messages per user
+	locks    sync.Map // user id -> *sync.Mutex
+	seen     sync.Map // user id -> time.Time of the last "last seen" write
+	hub      *hub     // WebSocket connections held by this instance
+	// seasonRolled is the latest ranked season whose reset this instance has run.
+	seasonRolled atomic.Int64
+	top          topCache // Home's top ten, shared by this server's clients
+	log          *slog.Logger
 }
 
 func New(st store.Store, cfg Config, log *slog.Logger) *Server {
 	s := &Server{st: st, cfg: cfg, origins: map[string]bool{}, log: log,
-		general: newLimiter(15, 40),       // requests/second per IP
-		authIP:  newLimiter(1.0/6.0, 10),  // burst 10, then 10/minute
-		authAcc: newLimiter(1.0/30.0, 8),  // burst 8 per account, then 2/minute: slows password guessing
-		mailTo:  newLimiter(1.0/300.0, 3), // burst 3 per address, then one every 5 minutes
-		chat:    newLimiter(1, 10),        // burst 10, then 1/second
-		duel:    newLimiter(1.0/5.0, 3),   // burst 3, then one every 5 seconds
+		general:  newLimiter(15, 40),       // requests/second per IP
+		authIP:   newLimiter(1.0/6.0, 10),  // burst 10, then 10/minute
+		authAcc:  newLimiter(1.0/30.0, 8),  // burst 8 per account, then 2/minute: slows password guessing
+		mailTo:   newLimiter(1.0/300.0, 3), // burst 3 per address, then one every 5 minutes
+		chat:     newLimiter(1, 10),        // burst 10, then 1/second
+		duel:     newLimiter(1.0/5.0, 3),   // burst 3, then one every 5 seconds
+		feedback: newLimiter(1.0/600.0, 5), // burst 5, then one every 10 minutes
 	}
 	if s.cfg.Bus == nil {
 		s.cfg.Bus = bus.NewLocal()
@@ -81,7 +87,8 @@ func New(st store.Store, cfg Config, log *slog.Logger) *Server {
 	s.mailTo.share(s.cfg.Bus, "mail")
 	s.chat.share(s.cfg.Bus, "chat")
 	s.duel.share(s.cfg.Bus, "duel")
-	trustProxy = cfg.TrustProxy
+	s.feedback.share(s.cfg.Bus, "feedback")
+	trustProxy.Store(cfg.TrustProxy)
 	for _, o := range cfg.AllowedOrigins {
 		s.origins[o] = true
 	}
@@ -101,11 +108,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/ws", s.ws)
 	mux.HandleFunc("GET /api/me", s.auth(s.me))
 	mux.HandleFunc("GET /api/profile", s.auth(s.profile))
+	mux.HandleFunc("GET /api/history", s.auth(s.history))
+	mux.HandleFunc("POST /api/feedback", s.auth(s.sendFeedback))
+	mux.HandleFunc("POST /api/achievements/seen", s.auth(s.achievementsSeen))
 	mux.HandleFunc("GET /api/plan", s.auth(s.getPlan))
 	mux.HandleFunc("POST /api/plan", s.auth(s.setPlan))
 	mux.HandleFunc("POST /api/profile/password", s.auth(s.changePassword))
 	mux.HandleFunc("POST /api/profile/email", s.auth(s.changeEmail))
 	mux.HandleFunc("POST /api/profile/resend", s.auth(s.resendVerify))
+	mux.HandleFunc("POST /api/profile/delete", s.auth(s.deleteAccount))
 	mux.HandleFunc("GET /api/friends", s.auth(s.friends))
 	mux.HandleFunc("POST /api/friends/request", s.auth(s.friendRequest))
 	mux.HandleFunc("POST /api/friends/respond", s.auth(s.friendRespond))
@@ -168,13 +179,15 @@ func (s *Server) headers(next http.Handler) http.Handler {
 	})
 }
 
-var trustProxy bool
+// trustProxy is process-wide (clientIP has no server at hand); atomic, so
+// servers created concurrently, as in tests, do not race on it.
+var trustProxy atomic.Bool
 
 func clientIP(r *http.Request) string {
 	// RemoteAddr by default: forwarded headers are client-controlled. Behind a
 	// trusted proxy (TRUST_PROXY=true) the last X-Forwarded-For entry is the one
 	// the proxy itself appended, so earlier, client-supplied entries are ignored.
-	if trustProxy {
+	if trustProxy.Load() {
 		if xff := r.Header.Values("X-Forwarded-For"); len(xff) > 0 {
 			parts := strings.Split(xff[len(xff)-1], ",")
 			if ip := net.ParseIP(strings.TrimSpace(parts[len(parts)-1])); ip != nil {
@@ -286,12 +299,17 @@ func writeErr(w http.ResponseWriter, code int, msg string) {
 // decode reads a small, strictly-typed JSON body: wrong content type, unknown
 // fields, trailing data and oversized bodies are all rejected.
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
+	return decodeMax(w, r, v, maxBody)
+}
+
+// decodeMax is decode with a larger body limit, for the few requests that carry text.
+func decodeMax(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
 	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mt != "application/json" {
 		writeErr(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json.")
 		return false
 	}
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody))
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		writeErr(w, http.StatusBadRequest, "Invalid request.")
@@ -405,6 +423,8 @@ type halfResponse struct {
 	Result *game.HistoryEntry `json:"result,omitempty"`
 	Names  [2]string          `json:"names"`
 	Run    game.RunView       `json:"run"`
+	// Achievements this match unlocked.
+	Unlocked []achievement `json:"unlocked,omitempty"`
 }
 
 func (s *Server) startMatch(w http.ResponseWriter, r *http.Request, sid string) {
@@ -466,20 +486,25 @@ func (s *Server) secondHalf(w http.ResponseWriter, r *http.Request, sid string) 
 		s.fail(w, r, err)
 		return
 	}
+	var unlocked []string
 	if h != nil {
-		d := map[string]int{"matches": 1, "gf": h.GF, "ga": h.GA}
-		if h.Won {
-			d["wins"] = 1
-		}
+		d := map[string]int{}
+		matchStats(d, *h)
 		if run.Phase == "ended" {
 			d["seasons"] = 1
+			if run.Result != "sacked" {
+				d["seasonsSurvived"] = 1
+			}
 			if run.Result == "champion" {
 				d["titles"] = 1
 			}
+			if run.Wins == game.MaxRounds {
+				d["perfectSeasons"] = 1
+			}
+			gameStats(d, run)
+			s.recordGame(r.Context(), store.GameRecord{UserID: sid, Mode: "solo", Result: run.Result}, run)
 		}
-		if err := s.st.AddStats(r.Context(), sid, d); err != nil {
-			s.log.Error("stats update failed", "err", err)
-		}
+		unlocked = s.recordStats(r.Context(), sid, d)
 	}
 	var events []game.Event
 	for _, e := range res.Events {
@@ -488,7 +513,7 @@ func (s *Server) secondHalf(w http.ResponseWriter, r *http.Request, sid string) 
 		}
 	}
 	writeJSON(w, 200, halfResponse{Half: 2, Roster: res.Roster, Frames: res.Frames[game.HalfTicks:], Events: events, Score: res.Score,
-		Stats: res.Stats, Pens: res.Pens, Result: h, Names: names, Run: run.View()})
+		Stats: res.Stats, Pens: res.Pens, Result: h, Names: names, Run: run.View(), Unlocked: views(unlocked)})
 }
 
 // ---- rate limiting ----
