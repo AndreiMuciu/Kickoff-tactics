@@ -458,3 +458,10 @@ button.stand:hover { border-color: var(--line); background: var(--panel2); }
 @media (prefers-reduced-motion: reduce) {
   .streak-name .streak-text, .streak-name .streak-icon { animation: none; }
 }
+
+/* Top 4 reached in a lobby: above the augment offer, so it is answered first. */
+.top4-overlay { z-index: 31; }
+.dialog.top4 { width: min(520px, 100%); background: linear-gradient(135deg, rgba(60, 48, 10, .97), rgba(12, 28, 44, .97)); border-color: rgba(253, 224, 71, .5); box-shadow: 0 20px 60px -10px rgba(0, 0, 0, .7), 0 0 50px -10px rgba(253, 224, 71, .55); animation: pop .35s ease-out; }
+.dialog.top4 h2 { margin: 0; font-size: 24px; }
+.dialog.top4 p { margin: 0; }
+.top4-badge { justify-self: center; font-size: 40px; font-weight: 900; letter-spacing: 4px; color: var(--gold); text-shadow: 0 0 18px rgba(253, 224, 71, .6); animation: pulse-gold 1.6s ease-in-out infinite; border-radius: 12px; padding: 4px 18px; }

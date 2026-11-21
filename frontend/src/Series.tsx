@@ -121,6 +121,33 @@ export default function Series({ id, kind, meta, photos, onClose, notify, specta
     if (outNow && stay && !watchedAlive && leader !== undefined) setWatching(leader)
   }, [outNow, stay, watchedAlive, leader])
 
+  // Made the top 4 of a lobby that started with more than four: congratulate
+  // once, after the round's result has been seen (the next window opens).
+  // Remembered per lobby so a reload does not show it again.
+  const [top4, setTop4] = useState(false)
+  const aliveCount = view?.standings?.filter((st) => st.alive).length ?? 0
+  const reachedTop4 =
+    lobby &&
+    !!view &&
+    view.status === 'live' &&
+    !!view.alive &&
+    (view.standings?.length ?? 0) > 4 &&
+    aliveCount > 1 &&
+    aliveCount <= 4 &&
+    view.phase !== 'result' &&
+    view.phase !== 'shootout'
+  useEffect(() => {
+    if (!reachedTop4) return
+    const key = `autofootball-top4-${id}`
+    try {
+      if (localStorage.getItem(key)) return
+      localStorage.setItem(key, '1')
+    } catch {
+      // Storage blocked: show it anyway, once per visit.
+    }
+    setTop4(true)
+  }, [reachedTop4, id])
+
   if (!view || !view.my)
     return (
       <div className="center">
@@ -481,6 +508,27 @@ export default function Series({ id, kind, meta, photos, onClose, notify, specta
                 Back to home
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {top4 && lobby && !!view.alive && (
+        <div className="overlay top4-overlay" onClick={() => setTop4(false)}>
+          <div className="dialog top4" onClick={(e) => e.stopPropagation()}>
+            <div className="top4-badge">TOP 4</div>
+            <h2>🎉 Congratulations, you made the top 4!</h2>
+            <p>
+              Only {aliveCount} managers are left: <b>{view.standings?.filter((st) => st.alive).map((st) => st.name).join(', ')}</b>.
+            </p>
+            {view.ranked ? (
+              <p className="lp">
+                <b className="win">+10 points</b> are already yours, and every place higher pays more. {aliveCount - 1 === 1 ? 'One rival' : `${aliveCount - 1} rivals`} left to beat.
+              </p>
+            ) : (
+              <p className="muted">{aliveCount - 1 === 1 ? 'One rival stands' : `${aliveCount - 1} rivals stand`} between you and the title.</p>
+            )}
+            <button className="primary big" onClick={() => setTop4(false)}>
+              Go for the title
+            </button>
           </div>
         </div>
       )}
