@@ -229,6 +229,11 @@ func (m *Mongo) ListGames(ctx context.Context, userID string, skip, limit int) (
 	return out, int(total), nil
 }
 
+func (m *Mongo) SetFeedbackAsked(ctx context.Context, uid string, at time.Time) error {
+	_, err := m.users.UpdateOne(ctx, id(uid), bson.D{{Key: "$set", Value: bson.D{{Key: "feedbackasked", Value: at}}}})
+	return err
+}
+
 func (m *Mongo) AddFeedback(ctx context.Context, f *Feedback) error {
 	_, err := m.feedback.InsertOne(ctx, f)
 	return err

@@ -153,6 +153,7 @@ type flight struct {
 }
 
 type sim struct {
+	draws   bool // a league match: level at full time stays a draw
 	rng     *RNG
 	pl      []*simPlayer
 	teamIdx [2][]int
@@ -197,6 +198,15 @@ var homeAdv = [3]float64{20, 33, 45}
 // second-half tactics, so a one-half run is an exact prefix of the full match.
 func Simulate(seed uint64, lineups [2]Lineup, tactics [2][2]string, halves int) *SimResult {
 	return simulate(seed, lineups, tactics, halves, [2]string{})
+}
+
+// SimulateLeague plays a full league match: level at full time is a draw
+// (Winner -1), with no shootout. Otherwise identical to Simulate.
+func SimulateLeague(seed uint64, lineups [2]Lineup, tactics [2][2]string) *SimResult {
+	s := newSim(seed, lineups, [2]string{})
+	s.draws = true
+	s.play(tactics, 2)
+	return s.res
 }
 
 // simulate plays the match. `without` names, per team, one combination to
@@ -317,6 +327,7 @@ func (s *sim) play(tactics [2][2]string, halves int) {
 			s.res.Winner = 0
 		case s.score[1] > s.score[0]:
 			s.res.Winner = 1
+		case s.draws:
 		default:
 			s.shootout()
 		}

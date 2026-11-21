@@ -347,7 +347,11 @@ export default function App() {
       )}
       <CookieNotice />
       {toast && <div className="toast">{toast}</div>}
-      <Feedback screen={view.at === 'game' ? 'solo' : 'home'} />
+      <Feedback
+        screen={view.at === 'game' ? 'solo' : 'home'}
+        ask={view.at === 'home' && !!me?.askFeedback}
+        onAsked={() => setMe((m) => (m ? { ...m, askFeedback: false } : m))}
+      />
     </>
   )
 }

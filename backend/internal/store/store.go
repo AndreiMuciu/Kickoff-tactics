@@ -65,6 +65,9 @@ type User struct {
 	// in restores it. Purged: the personal data has been erased.
 	DeletedAt time.Time `bson:"deletedat,omitempty"`
 	Purged    bool      `bson:"purged,omitempty"`
+	// FeedbackAsked is when the game last asked the manager for feedback (or
+	// he sent some); it asks again a week later.
+	FeedbackAsked time.Time `bson:"feedbackasked,omitempty"`
 }
 
 // Hidden reports whether the account is deleted or waiting to be.
@@ -91,6 +94,7 @@ type MatchLine struct {
 	GA       int    `json:"ga" bson:"ga"`
 	Pens     bool   `json:"pens,omitempty" bson:"pens,omitempty"`
 	Won      bool   `json:"won" bson:"won"`
+	Draw     bool   `json:"draw,omitempty" bson:"draw,omitempty"`
 }
 
 // GameRecord is one finished game in a manager's history: a solo season, a
@@ -104,9 +108,10 @@ type GameRecord struct {
 	Result   string      `json:"result" bson:"result"` // solo: champion|europe|survived|sacked; series: won|lost; lobby: empty (see Place)
 	Place    int         `json:"place,omitempty" bson:"place,omitempty"`
 	Of       int         `json:"of,omitempty" bson:"of,omitempty"`
-	Points   int         `json:"points,omitempty" bson:"points,omitempty"` // ranked: points won or lost
+	Points   int         `json:"points,omitempty" bson:"points,omitempty"` // ranked: points won or lost; solo: league points
 	Opponent string      `json:"opponent,omitempty" bson:"opponent,omitempty"`
 	Wins     int         `json:"wins" bson:"wins"`
+	Draws    int         `json:"draws,omitempty" bson:"draws,omitempty"`
 	Losses   int         `json:"losses" bson:"losses"`
 	Matches  []MatchLine `json:"matches" bson:"matches"`
 }
@@ -283,6 +288,8 @@ type Store interface {
 	// ListGames returns one page of the user's games, newest first, and how many he has in all.
 	ListGames(ctx context.Context, userID string, skip, limit int) ([]GameRecord, int, error)
 	AddFeedback(ctx context.Context, f *Feedback) error
+	// SetFeedbackAsked records when the manager was last asked for feedback.
+	SetFeedbackAsked(ctx context.Context, id string, at time.Time) error
 
 	// SetDeleted marks the account as deleted at `at`; a zero time restores it.
 	SetDeleted(ctx context.Context, id string, at time.Time) error
@@ -602,6 +609,18 @@ func (m *Memory) PurgeUser(_ context.Context, u *User, anon string) error {
 	stub := User{ID: u.ID, Name: anon, NameKey: "deleted:" + u.ID, CreatedAt: cur.CreatedAt, DeletedAt: cur.DeletedAt, Purged: true}
 	m.users[u.ID] = stub
 	m.byName[stub.NameKey] = u.ID
+	return nil
+}
+
+func (m *Memory) SetFeedbackAsked(_ context.Context, id string, at time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.users[id]
+	if !ok {
+		return ErrNotFound
+	}
+	u.FeedbackAsked = at
+	m.users[id] = u
 	return nil
 }
 

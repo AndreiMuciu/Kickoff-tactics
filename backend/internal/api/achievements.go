@@ -38,9 +38,10 @@ var achievements = []achievement{
 	{ID: "three_star", Icon: "⭐", Name: "Legend Built", Desc: "Finish a game with a three-star player.", Stat: "threeStars", Target: 1},
 	{ID: "full_house", Icon: "🏗", Name: "Full House", Desc: "Finish a game with the stadium at level 10.", Stat: "fullStadiums", Target: 1},
 	{ID: "season", Icon: "📅", Name: "Survivor", Desc: "Finish a solo season without being sacked.", Stat: "seasonsSurvived", Target: 1},
-	{ID: "champion", Icon: "🏆", Name: "Champions!", Desc: "Win a solo season.", Stat: "titles", Target: 1},
-	{ID: "champion_5", Icon: "🏛", Name: "Dynasty", Desc: "Win five solo seasons.", Stat: "titles", Target: 5},
-	{ID: "perfect", Icon: "👑", Name: "Invincibles", Desc: "Win every fixture of a solo season.", Stat: "perfectSeasons", Target: 1},
+	{ID: "champion", Icon: "🏆", Name: "Champions!", Desc: "Win the solo league.", Stat: "titles", Target: 1},
+	{ID: "champion_5", Icon: "🏛", Name: "Dynasty", Desc: "Win the solo league five times.", Stat: "titles", Target: 5},
+	{ID: "unbeaten", Icon: "🛡", Name: "Invincibles", Desc: "Win the solo league without losing a match.", Stat: "unbeatenTitles", Target: 1},
+	{ID: "perfect", Icon: "👑", Name: "Perfect Season", Desc: "Win every match of a solo season.", Stat: "perfectSeasons", Target: 1},
 	{ID: "lobby", Icon: "🎟", Name: "Debut", Desc: "Finish a lobby.", Stat: "lobbies", Target: 1},
 	{ID: "top4", Icon: "4️⃣", Name: "Top Four", Desc: "Finish a lobby in the top 4.", Stat: "lobbyTop4", Target: 1},
 	{ID: "top4_10", Icon: "📈", Name: "Consistent", Desc: "Finish in the top 4 ten times.", Stat: "lobbyTop4", Target: 10},
@@ -214,10 +215,13 @@ func (s *Server) recordGame(ctx context.Context, g store.GameRecord, run *game.R
 	g.Matches = []store.MatchLine{}
 	if run != nil {
 		for _, h := range run.History {
-			g.Matches = append(g.Matches, store.MatchLine{Round: h.Round, Opponent: h.Opponent, GF: h.GF, GA: h.GA, Pens: h.Pens, Won: h.Won})
-			if h.Won {
+			g.Matches = append(g.Matches, store.MatchLine{Round: h.Round, Opponent: h.Opponent, GF: h.GF, GA: h.GA, Pens: h.Pens, Won: h.Won, Draw: h.Draw})
+			switch {
+			case h.Won:
 				g.Wins++
-			} else {
+			case h.Draw:
+				g.Draws++
+			default:
 				g.Losses++
 			}
 		}
@@ -258,6 +262,27 @@ const (
 )
 
 var feedbackKinds = map[string]string{"idea": "Idea", "bug": "Bug", "other": "Other"}
+
+// feedbackEvery is how often the game asks a manager whether he has anything
+// to say. The first question comes a week after sign-up.
+const feedbackEvery = 7 * 24 * time.Hour
+
+func askFeedback(u *store.User, now time.Time) bool {
+	last := u.FeedbackAsked
+	if last.Before(u.CreatedAt) {
+		last = u.CreatedAt
+	}
+	return now.Sub(last) >= feedbackEvery
+}
+
+// feedbackLater answers the weekly question ("not now", or the form was opened).
+func (s *Server) feedbackLater(w http.ResponseWriter, r *http.Request, uid string) {
+	if err := s.st.SetFeedbackAsked(r.Context(), uid, time.Now().UTC()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
 
 func (s *Server) sendFeedback(w http.ResponseWriter, r *http.Request, uid string) {
 	var b struct {
@@ -311,6 +336,7 @@ func (s *Server) sendFeedback(w http.ResponseWriter, r *http.Request, uid string
 		s.send(mailer.Message{To: s.cfg.FeedbackTo, Subject: "[Kickoff Tactics] " + label + " from " + u.Name,
 			Body: label + " from " + u.Name + " (screen: " + f.Screen + ", " + f.At.Format(time.RFC1123) + ")\n\n" + f.Text + "\n"})
 	}
+	_ = s.st.SetFeedbackAsked(r.Context(), uid, f.At)
 	unlocked := s.recordStats(r.Context(), uid, map[string]int{"feedback": 1})
 	writeJSON(w, 200, map[string]any{"ok": true, "unlocked": views(unlocked)})
 }

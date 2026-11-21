@@ -10,9 +10,15 @@ const KINDS: [Kind, string][] = [
 const MAX = 1500
 
 // A button on every screen that opens a short form: ideas and bug reports go
-// straight to the people who make the game.
-export default function Feedback({ screen }: { screen: string }) {
+// straight to the people who make the game. Once a week (`ask`, decided by the
+// server) the game also asks, politely, whether there is anything to say.
+export default function Feedback({ screen, ask, onAsked }: { screen: string; ask?: boolean; onAsked?: () => void }) {
   const [open, setOpen] = useState(false)
+  const answer = (write: boolean) => {
+    void api.feedbackLater().catch(() => {})
+    onAsked?.()
+    if (write) setOpen(true)
+  }
   const [kind, setKind] = useState<Kind>('idea')
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -43,6 +49,21 @@ export default function Feedback({ screen }: { screen: string }) {
 
   return (
     <>
+      {ask && !open && (
+        <div className="overlay feedback-overlay">
+          <div className="dialog feedback ask">
+            <h2>💬 Got a minute?</h2>
+            <p>You have been playing for a while. Is there anything you would like to tell us about the game: something you love, something that annoys you, an idea?</p>
+            <div className="row center-row">
+              <button onClick={() => answer(false)}>Nothing this week</button>
+              <button className="primary" onClick={() => answer(true)}>
+                Yes, I have something
+              </button>
+            </div>
+            <p className="muted small">We ask at most once a week. The 💬 Feedback button is always in the corner.</p>
+          </div>
+        </div>
+      )}
       <button className="feedback-fab" onClick={() => setOpen(true)} title="Send us an idea or report a bug">
         💬 Feedback
       </button>

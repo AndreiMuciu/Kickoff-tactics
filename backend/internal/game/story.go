@@ -164,7 +164,7 @@ func (r *Run) chooseStory(choice int) error {
 
 // settlePledge applies a promise made before this match and says what came of it.
 // It returns the extra patience a broken promise costs and a line for the history.
-func (r *Run) settlePledge(won bool, gf, ga int) (extraDamage int, note string) {
+func (r *Run) settlePledge(won, draw bool, gf, ga int) (extraDamage int, note string) {
 	p := r.Pledge
 	r.Pledge = ""
 	switch p {
@@ -173,11 +173,17 @@ func (r *Run) settlePledge(won bool, gf, ga int) (extraDamage int, note string) 
 			r.Patience = min(StartPatience, r.Patience+pledgeWinBonus)
 			return 0, "Promise kept: owner's patience +3"
 		}
+		if draw {
+			return 0, "Only a draw: the promise was not kept, but no harm done"
+		}
 		return pledgeBroken, "Promise broken: the defeat cost 2 more"
 	case pledgeBigWin:
 		if won && gf-ga >= 2 {
 			r.Patience = min(StartPatience, r.Patience+pledgeBigBonus)
 			return 0, "The fans got their big win: patience +4"
+		}
+		if draw {
+			return 0, "A draw: not what the fans were promised, but no harm done"
 		}
 		if !won {
 			return pledgeBroken, "Derby promise broken: the defeat cost 2 more"

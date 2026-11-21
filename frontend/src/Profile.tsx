@@ -20,14 +20,18 @@ const MODE: Record<GameRecord['mode'], string> = {
 const SOLO: Record<string, string> = {
   champion: '🏆 Champions',
   europe: '🎟 European place',
-  survived: '😮‍💨 Survived',
+  survived: '😮‍💨 Mid-table',
+  relegated: '⬇️ Relegated',
   sacked: '📦 Sacked',
 }
 
 function outcome(g: GameRecord): { text: string; good: boolean } {
   switch (g.mode) {
     case 'solo':
-      return { text: SOLO[g.result] ?? g.result, good: g.result !== 'sacked' }
+      return {
+        text: `${SOLO[g.result] ?? g.result}${g.place && g.result !== 'sacked' ? ` · ${g.place} of ${g.of}, ${g.points ?? 0} pts` : ''}`,
+        good: g.result !== 'sacked' && g.result !== 'relegated',
+      }
     case 'series':
       return {
         text: g.result === 'won' ? `Beat ${g.opponent}` : `Lost to ${g.opponent}`,
@@ -109,7 +113,7 @@ function History() {
               </span>
               <b className={o.good ? 'win' : 'loss'}>{o.text}</b>
               <span className="game-record">
-                {g.wins}W {g.losses}L
+                {g.wins}W {g.draws ? `${g.draws}D ` : ''}{g.losses}L
               </span>
               {g.mode === 'ranked' && (
                 <b className={(g.points ?? 0) >= 0 ? 'win' : 'loss'}>
@@ -123,7 +127,7 @@ function History() {
               <div className="game-matches">
                 {g.matches.length === 0 && <p className="muted">No matches recorded.</p>}
                 {g.matches.map((m, i) => (
-                  <p key={i} className={m.won ? 'win' : 'loss'}>
+                  <p key={i} className={m.won ? 'win' : m.draw ? 'draw' : 'loss'}>
                     {m.round}. {m.opponent}{' '}
                     <b>
                       {m.gf}–{m.ga}

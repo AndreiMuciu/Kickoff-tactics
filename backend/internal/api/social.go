@@ -184,9 +184,12 @@ type seasonSummary struct {
 	Round     int    `json:"round"`
 	MaxRounds int    `json:"maxRounds"`
 	Wins      int    `json:"wins"`
+	Draws     int    `json:"draws"`
 	Losses    int    `json:"losses"`
 	Patience  int    `json:"patience"`
 	Result    string `json:"result"`
+	Points    int    `json:"points"`   // league points
+	Position  int    `json:"position"` // league position, 1-10
 }
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request, uid string) {
@@ -195,10 +198,14 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request, uid string) {
 		writeErr(w, http.StatusUnauthorized, "Please sign in.")
 		return
 	}
-	out := map[string]any{"name": u.Name, "season": nil, "hasSquad": false, "hasEmail": u.EmailKey != "", "verified": u.Verified, "newAchievements": unseenAchievements(u)}
+	out := map[string]any{"name": u.Name, "season": nil, "hasSquad": false, "hasEmail": u.EmailKey != "", "verified": u.Verified, "newAchievements": unseenAchievements(u), "askFeedback": askFeedback(u, time.Now())}
 	if run, err := s.loadRun(r.Context(), uid); err == nil {
 		_, out["hasSquad"] = run.Squad(u.Name)
-		out["season"] = seasonSummary{Phase: run.Phase, Round: run.Round, MaxRounds: game.MaxRounds, Wins: run.Wins, Losses: run.Losses, Patience: run.Patience, Result: run.Result}
+		sum := seasonSummary{Phase: run.Phase, Round: run.Round, MaxRounds: game.MaxRounds, Wins: run.Wins, Draws: run.Draws, Losses: run.Losses, Patience: run.Patience, Result: run.Result}
+		if lv := run.View().League; lv != nil {
+			sum.Points, sum.Position = lv.Points, lv.Position
+		}
+		out["season"] = sum
 	} else if !errors.Is(err, store.ErrNotFound) {
 		s.fail(w, r, err)
 		return

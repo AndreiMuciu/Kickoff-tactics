@@ -225,3 +225,31 @@ func TestFriendProfile(t *testing.T) {
 		t.Fatalf("friend profile: %v", p)
 	}
 }
+
+// The game asks for feedback a week after sign-up, then a week after every
+// answer or message.
+func TestWeeklyFeedbackQuestion(t *testing.T) {
+	ts, st, c, _ := testServer(t)
+	call(t, c, "POST", ts.URL+"/api/auth/signup", map[string]string{"username": "ask_user", "email": "ask@game.test", "password": "a-long-password-1"}, nil)
+	var me struct {
+		Ask bool `json:"askFeedback"`
+	}
+	if call(t, c, "GET", ts.URL+"/api/me", nil, &me); me.Ask {
+		t.Fatal("asked on the first day")
+	}
+	u, _ := st.UserByName(context.Background(), "ask_user")
+	if !askFeedback(&store.User{CreatedAt: u.CreatedAt.Add(-8 * 24 * time.Hour)}, time.Now()) {
+		t.Fatal("not asked after eight days")
+	}
+	asked := &store.User{CreatedAt: time.Now().Add(-30 * 24 * time.Hour), FeedbackAsked: time.Now().Add(-6 * 24 * time.Hour)}
+	if askFeedback(asked, time.Now()) {
+		t.Fatal("asked again within the week")
+	}
+	_ = st.SetFeedbackAsked(context.Background(), u.ID, time.Time{})
+	if code := call(t, c, "POST", ts.URL+"/api/feedback/later", map[string]string{}, nil); code != 200 {
+		t.Fatalf("later: %d", code)
+	}
+	if u, _ = st.UserByName(context.Background(), "ask_user"); time.Since(u.FeedbackAsked) > time.Minute {
+		t.Fatal("the answer was not recorded")
+	}
+}

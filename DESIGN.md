@@ -41,7 +41,16 @@ taken as-is, so the design below is rethought. Items marked **[in demo]** exist 
 
 ## Game loop [in demo]
 
-Season of 8 fixtures against server-run clubs of rising strength.
+A league of ten clubs over nine matchdays (2026-11-21): you and nine server-run clubs of rising
+strength, everyone meeting everyone once (`game/league.go`). Win 3 points, draw 1: a solo match
+level at full time is a draw, with no shootout (`SimulateLeague`); a draw costs no patience and
+ends any streak. Your matches are simulated; the rivals' matches against each other are told, not
+played: a Poisson scoreline from each club's strength (rival k = k plus a little form drawn per
+season, `leagueEdge` 0.09 goals per point of strength), so the table moves every matchday at no
+cost. You meet the rivals weakest first. The table (sidebar, after every match with the other
+results, and at the end) marks the champion, Europe (2-4) and relegation (9-10). The season ends
+by position: 1 champion, 2-4 European place, 5-8 mid-table, 9-10 relegated; sacked as before when
+patience runs out. Seasons from before the league are treated as absent and start again.
 
 - **Market**: 5 players on offer, refreshed free each fixture; a new set costs 2. **Lock** keeps the
   current set for the next transfer window, once (as in TFT); a paid refresh unlocks it. The budget
@@ -68,8 +77,8 @@ Season of 8 fixtures against server-run clubs of rising strength.
 - **Stadium** (level 1-10): one outfield player per level, plus the keeper, and better players on the market.
   Level 10 is a full eleven. 2 free XP per fixture; 4 XP cost 4. XP per level: 2, 2, 4, 6, 8, 10, 14, 18, 24.
   Squad Rotation adds one outfield player, but never past ten.
-- **Opponents** field 1, 1, 2, 3, 4, 4, 5, 6 outfield players across the eight fixtures, of cost up
-  to 1, 1, 2, 2, 3, 3, 4, 4, with a two-star chance of 0-60% (`soloCount`, `soloMaxCost`,
+- **Opponents** field 1, 1, 2, 2, 3, 4, 4, 5, 6 outfield players across the nine matchdays, of cost
+  up to 1, 1, 1, 2, 2, 3, 3, 4, 4, with a two-star chance of 0-60% (`soloCount`, `soloMaxCost`,
   `soloStar2` in `game/run.go`).
 - **Story** (solo only): the season is told as a story. An opening chapter before fixture 1, one
   line about every rival, the owner's reaction after each match and an epilogue per ending
@@ -227,6 +236,8 @@ five scores, penalties 0.050 a match instead of 0.015.
   opponents since: 19% sacked, 14% champions, 50% European place; win rate per fixture
   54 / 74 / 61 / 59 / 44 / 47 / 31 / 26% (the last two stay the hard finale). A person plays
   better than the bot.
+- **League** (2026-11-21, bot play, 400 seasons): 10% champions, 42% Europe, 35% mid-table,
+  3.5% relegated, 8% sacked; the champion ends on about 20 points of 27, the bot on 14.5.
 - `TestMatchInvariants` plays 4000 random matches and checks that score, goal events, shootouts,
   sendings-off and positions tell one story.
 
@@ -464,6 +475,12 @@ account (`plan`), so it is the same in a solo season, a live series and every lo
   series, with its matches): profile tab, 10 per page, newest first (`GET /api/history?page=`).
 - **Friend profiles**: clicking a friend's name opens his profile (overview and achievements,
   without email or history). `GET /api/profile?name=` answers only for accepted friends.
+- **Achievements for the league**: Invincibles (win the league without losing a match) and Perfect
+  Season (win every match).
+- **Weekly question**: a week after sign-up, and a week after every answer or message, Home asks
+  whether the manager has anything to say ("Nothing this week" / "Yes, I have something", which
+  opens the form). Decided on the server (`askFeedback`, `feedbackasked`), so it is the same on
+  every device.
 - **Feedback**: a button on every screen opens a form (idea / bug / other, 10-1500 characters).
   Stored in the `feedback` collection and mailed to `FEEDBACK_TO`, or to the address of
   `MAIL_FROM` when unset. Five messages, then one per 10 minutes per manager.

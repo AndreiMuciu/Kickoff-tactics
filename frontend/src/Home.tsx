@@ -4,8 +4,9 @@ import type { ChatMessage, FriendList, Me, Ranking, RankedView } from './api'
 import { watch } from './live'
 import { QUOTES } from './quotes'
 import Profile from './Profile'
+import { ord } from './League'
 
-const RESULT: Record<string, string> = { champion: '🏆 Champions', europe: '🎟 European place', survived: '😮‍💨 Survived', sacked: '📦 Sacked' }
+const RESULT: Record<string, string> = { champion: '🏆 Champions', europe: '🎟 European place', survived: '😮‍💨 Mid-table', relegated: '⬇️ Relegated', sacked: '📦 Sacked' }
 
 interface Props {
   me: Me
@@ -161,8 +162,9 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
           <h2>{inSeason ? 'Your season is waiting' : 'Start a season'}</h2>
           {s ? (
             <p>
-              {s.phase === 'ended' ? `Last season: ${RESULT[s.result] ?? 'finished'}. ` : `Fixture ${s.round} of ${s.maxRounds}. `}
-              Record {s.wins}W {s.losses}L{inSeason ? `, owner's patience ${s.patience}.` : '.'}
+              {s.phase === 'ended' ? `Last season: ${RESULT[s.result] ?? 'finished'}. ` : `Matchday ${s.round} of ${s.maxRounds}. `}
+              {s.round > 1 || s.phase === 'ended' ? `${s.points} pts, ${ord(s.position)} in the league. ` : ''}
+              Record {s.wins}W {s.draws ?? 0}D {s.losses}L{inSeason ? `, owner's patience ${s.patience}.` : '.'}
               {s.phase === 'halftime' && ' You are at half-time.'}
             </p>
           ) : (

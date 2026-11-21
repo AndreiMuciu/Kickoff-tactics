@@ -315,6 +315,7 @@ func TestBalanceCostAndStars(t *testing.T) {
 func TestBalanceSoloSeason(t *testing.T) {
 	skipUnlessReport(t)
 	results, reached, won := map[string]int{}, [MaxRounds + 1]int{}, [MaxRounds + 1]int{}
+	positions, finished, champPts, myPts := [LeagueTeams + 1]int{}, 0, 0, 0
 	const n = 400
 	for k := 0; k < n; k++ {
 		r, err := NewRun(fmt.Sprintf("solo-%d", k))
@@ -338,6 +339,12 @@ func TestBalanceSoloSeason(t *testing.T) {
 			}
 		}
 		results[r.Result]++
+		if r.Result != "sacked" {
+			finished++
+			positions[r.League.Position()]++
+			champPts += r.League.Table()[0].Pts
+			myPts += r.League.view().Points
+		}
 	}
 	t.Logf("results of %d seasons: %v", n, results)
 	t.Logf("seasons that reached each fixture: %v", reached[1:])
@@ -346,4 +353,6 @@ func TestBalanceSoloSeason(t *testing.T) {
 		rates = append(rates, fmt.Sprintf("%d%%", 100*won[i]/max(reached[i], 1)))
 	}
 	t.Logf("win rate per fixture: %v", rates)
+	t.Logf("final positions of finished seasons (1..10): %v", positions[1:])
+	t.Logf("average champion points: %.1f, your average points: %.1f", float64(champPts)/float64(max(finished, 1)), float64(myPts)/float64(max(finished, 1)))
 }

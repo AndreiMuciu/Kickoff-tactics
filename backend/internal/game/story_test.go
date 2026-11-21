@@ -67,17 +67,17 @@ func TestStoryChoices(t *testing.T) {
 	// Promises are judged by the next match.
 	r = fresh("press")
 	_ = r.Apply(Action{Type: "story", Slot: 0})
-	if extra, note := r.settlePledge(true, 2, 1); extra != 0 || r.Patience != 10+pledgeWinBonus || note == "" {
+	if extra, note := r.settlePledge(true, false, 2, 1); extra != 0 || r.Patience != 10+pledgeWinBonus || note == "" {
 		t.Fatalf("kept promise: extra %d patience %d note %q", extra, r.Patience, note)
 	}
 	r = fresh("derby")
 	_ = r.Apply(Action{Type: "story", Slot: 0})
-	if extra, _ := r.settlePledge(false, 0, 1); extra != pledgeBroken || r.Pledge != "" {
+	if extra, _ := r.settlePledge(false, false, 0, 1); extra != pledgeBroken || r.Pledge != "" {
 		t.Fatalf("broken derby promise: extra %d pledge %q", extra, r.Pledge)
 	}
 	r = fresh("owner")
 	_ = r.Apply(Action{Type: "story", Slot: 0})
-	if r.settlePledge(false, 0, 0); r.Budget != 2+cleanBonus {
+	if r.settlePledge(false, true, 0, 0); r.Budget != 2+cleanBonus {
 		t.Fatalf("clean sheet bonus: budget %d", r.Budget)
 	}
 }

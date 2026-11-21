@@ -110,6 +110,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/profile", s.auth(s.profile))
 	mux.HandleFunc("GET /api/history", s.auth(s.history))
 	mux.HandleFunc("POST /api/feedback", s.auth(s.sendFeedback))
+	mux.HandleFunc("POST /api/feedback/later", s.auth(s.feedbackLater))
 	mux.HandleFunc("POST /api/achievements/seen", s.auth(s.achievementsSeen))
 	mux.HandleFunc("GET /api/plan", s.auth(s.getPlan))
 	mux.HandleFunc("POST /api/plan", s.auth(s.setPlan))
@@ -345,7 +346,8 @@ func (s *Server) loadRun(ctx context.Context, owner string) (*game.Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	if run.Stale() {
+	// A season from before the league (no table) cannot continue either.
+	if run.Stale() || run.League == nil {
 		return nil, store.ErrNotFound
 	}
 	return run, nil
@@ -501,8 +503,15 @@ func (s *Server) secondHalf(w http.ResponseWriter, r *http.Request, sid string) 
 			if run.Wins == game.MaxRounds {
 				d["perfectSeasons"] = 1
 			}
+			if run.Result == "champion" && run.Losses == 0 {
+				d["unbeatenTitles"] = 1
+			}
 			gameStats(d, run)
-			s.recordGame(r.Context(), store.GameRecord{UserID: sid, Mode: "solo", Result: run.Result}, run)
+			g := store.GameRecord{UserID: sid, Mode: "solo", Result: run.Result, Of: game.LeagueTeams}
+			if run.League != nil {
+				g.Place, g.Points = run.League.Position(), run.View().League.Points
+			}
+			s.recordGame(r.Context(), g, run)
 		}
 		unlocked = s.recordStats(r.Context(), sid, d)
 	}

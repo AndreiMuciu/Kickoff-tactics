@@ -5,14 +5,15 @@ export const INTRO = {
   title: 'The phone rings',
   text: [
     "Nobody else wanted the job. The club plays on a pitch behind a supermarket, the kit is two sizes too big, and the owner hired you after a ten-minute chat in a car park.",
-    'Eight fixtures. Every club in this league is a little stronger than the last, and the owner is not a patient man. Lose too often and you are clearing your locker before the summer.',
-    'Win six and they will build you a statue. Sign players, find a style, and prove him right.',
+    'Ten clubs, nine matchdays, everyone plays everyone once. You meet the weakest first and every opponent after that is a little stronger. Three points for a win, one for a draw, and the owner is not a patient man: lose too often and you are clearing your locker before the summer.',
+    'Finish top and they will build you a statue. The top four go to Europe; the bottom two go down. Sign players, find a style, and prove him right.',
   ],
 }
 
 // One line about each opponent, fixture by fixture (the server's club names, in order).
 export const RIVALS: Record<string, string> = {
   'Sunday League FC': 'Half of them came straight from a barbecue. A gentle start, if you take it seriously.',
+  'Bus Stop Wanderers': 'Nobody knows where they train. They turn up late, in two cars, and still expect to win.',
   'Car Park Rovers': 'They train between parked cars and hate losing on their own tarmac.',
   'Garage Athletic': 'Scrappy and loud. They have heard you are the new favourite and want to spoil the story.',
   'Kiosk United': 'Owned by a newspaper seller. Their striker reads every word written about him.',
@@ -31,6 +32,7 @@ export const PLEDGES: Record<string, string> = {
 // What the owner says after a match.
 export function reaction(won: boolean, gf: number, ga: number, round: number): string {
   const margin = Math.abs(gf - ga)
+  if (gf === ga) return round >= 7 ? '“A point. Is a point enough, coach?” The owner is doing sums.' : '“A point is a point.” The owner shrugs.'
   if (won && margin >= 3) return '“That is what I pay you for.” The owner is buying drinks for the whole stand.'
   if (won && round >= 7) return '“Now we are talking.” The owner has started practising his trophy speech.'
   if (won) return '“Good. Do it again.” The owner almost smiles.'
@@ -46,11 +48,15 @@ export const EPILOGUE: Record<string, { title: string; text: string }> = {
   },
   europe: {
     title: '🎟 European football',
-    text: 'Not the title, but the town is planning its first trip abroad. The owner extends your contract and buys a bigger car.',
+    text: 'A top-four finish: the town is planning its first trip abroad. The owner extends your contract and buys a bigger car.',
   },
   survived: {
-    title: '😮‍💨 You lasted the season',
-    text: 'Not pretty, but you were still in the dugout at the end. The owner shakes your hand and says “next year”.',
+    title: '😮‍💨 Mid-table',
+    text: 'No trophy, no drama: safe in the middle of the table. The owner shakes your hand and says “next year”.',
+  },
+  relegated: {
+    title: '⬇️ Relegated',
+    text: 'You lasted the whole season, but the club goes down. The owner is already phoning the league to ask about appeals.',
   },
   sacked: {
     title: '📦 Sacked',

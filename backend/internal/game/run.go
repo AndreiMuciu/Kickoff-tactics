@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	MaxRounds     = 8
+	MaxRounds     = 9 // solo fixtures: a league of ten, everyone meets everyone once
 	BenchSize     = 8
 	ShopSize      = 5
 	MaxLevel      = 10 // ten outfield players and a keeper: a full eleven
@@ -68,6 +68,7 @@ type HistoryEntry struct {
 	GA       int    `json:"ga"`
 	Pens     bool   `json:"pens"`
 	Won      bool   `json:"won"`
+	Draw     bool   `json:"draw,omitempty"` // solo league: level at full time
 	Damage   int    `json:"damage"`
 	Income   int    `json:"income"`
 	Note     string `json:"note,omitempty"` // what came of a promise made before the match
@@ -91,12 +92,16 @@ type Run struct {
 	Opponent  Opponent
 	Streak    int
 	Wins      int
+	Draws     int `bson:",omitempty"`
 	Losses    int
 	Match     *MatchState
-	History   []HistoryEntry
-	Result    string
-	NextUID   int
-	RNGState  int64
+	// League is the solo season's table; nil for live games and for seasons
+	// from before the league (those are treated as absent).
+	League   *League `bson:",omitempty"`
+	History  []HistoryEntry
+	Result   string
+	NextUID  int
+	RNGState int64
 	// Locked keeps the market as it is for the next transfer window, once.
 	Locked bool
 	// FreeReroll: the next market refresh costs nothing (Scouting Network).
@@ -149,6 +154,7 @@ func NewRun(sessionID string) (*Run, error) {
 	r.withRNG(func(g *RNG) {
 		r.rollShop(g)
 		r.Opponent = genOpponent(g, 1)
+		r.League = NewLeague(g)
 	})
 	return r, nil
 }
@@ -188,15 +194,15 @@ func (r *Run) rollShop(g *RNG) {
 	}
 }
 
-var clubNames = [MaxRounds]string{"Sunday League FC", "Car Park Rovers", "Garage Athletic", "Kiosk United", "Stairwell Sporting", "Roundabout Olympic", "Valley Galacticos", "Imperial XI"}
+var clubNames = [MaxRounds]string{"Sunday League FC", "Bus Stop Wanderers", "Car Park Rovers", "Garage Athletic", "Kiosk United", "Stairwell Sporting", "Roundabout Olympic", "Valley Galacticos", "Imperial XI"}
 
 // The solo opponents, fixture by fixture: outfield players, the dearest
 // player they may field, and the chance (%) of a two-star player. Tuned with
 // TestBalanceSoloSeason.
 var (
-	soloCount   = [MaxRounds]int{1, 1, 2, 3, 4, 4, 5, 6}
-	soloMaxCost = [MaxRounds]int{1, 1, 2, 2, 3, 3, 4, 4}
-	soloStar2   = [MaxRounds]int{0, 0, 15, 25, 30, 40, 50, 60}
+	soloCount   = [MaxRounds]int{1, 1, 2, 2, 3, 4, 4, 5, 6}
+	soloMaxCost = [MaxRounds]int{1, 1, 1, 2, 2, 3, 3, 4, 4}
+	soloStar2   = [MaxRounds]int{0, 0, 10, 20, 25, 35, 45, 50, 60}
 	soloStar3   = 10 // fixtures 7-8: chance (%) that a cheap player has three stars
 )
 
@@ -253,7 +259,7 @@ func genOpponent(g *RNG, round int) Opponent {
 		return 0, 0
 	}
 	op := Opponent{Name: clubNames[i]}
-	keeper := [MaxRounds]string{AcademyKeeper, AcademyKeeper, "pickford", "onana", "emi", "neuer", "courtois", "donnarumma"}[i]
+	keeper := [MaxRounds]string{AcademyKeeper, AcademyKeeper, AcademyKeeper, "pickford", "onana", "emi", "neuer", "courtois", "donnarumma"}[i]
 	op.Units = append(op.Units, Unit{UID: "ogk", Def: keeper, Stars: 1, Line: GKLine, Lane: 0})
 	for n, id := range ids {
 		d := PlayerByID[id]
@@ -644,18 +650,26 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 	half := Simulate(seed, lus, [2][2]string{{"balanced", "balanced"}, {"balanced", "balanced"}}, 1)
 	// The bot's order depends only on the half-time score, never on the player's choice.
 	bot := botTactic(NewRNG(seed^0xA5A5A5A5), half.Score)
-	res := Simulate(seed, lus, [2][2]string{{"balanced", tactic}, {"balanced", bot}}, 2)
+	res := SimulateLeague(seed, lus, [2][2]string{{"balanced", tactic}, {"balanced", bot}})
 
-	h := HistoryEntry{Round: r.Round, Opponent: r.Opponent.Name, GF: res.Score[0], GA: res.Score[1], Pens: len(res.Pens) > 0, Won: res.Winner == 0, Seed: r.Match.Seed, Commit: r.Match.Commit}
-	extra, note := r.settlePledge(h.Won, h.GF, h.GA)
+	h := HistoryEntry{Round: r.Round, Opponent: r.Opponent.Name, GF: res.Score[0], GA: res.Score[1], Won: res.Winner == 0, Draw: res.Winner < 0, Seed: r.Match.Seed, Commit: r.Match.Commit}
+	extra, note := r.settlePledge(h.Won, h.Draw, h.GF, h.GA)
 	h.Note = note
-	if h.Won {
+	if r.League != nil {
+		r.withRNG(func(g *RNG) { r.League.playRound(g, r.Round, h.GF, h.GA) })
+	}
+	switch {
+	case h.Won:
 		r.Wins++
 		if r.Streak < 0 {
 			r.Streak = 0
 		}
 		r.Streak++
-	} else {
+	case h.Draw:
+		// A point, no harm to the owner's patience, and any streak ends.
+		r.Draws++
+		r.Streak = 0
+	default:
 		r.Losses++
 		if r.Streak > 0 {
 			r.Streak = 0
@@ -672,14 +686,7 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 		r.Phase, r.Result = "ended", "sacked"
 	case r.Round >= MaxRounds:
 		r.Phase = "ended"
-		switch {
-		case r.Wins >= 6:
-			r.Result = "champion"
-		case r.Wins >= 4:
-			r.Result = "europe"
-		default:
-			r.Result = "survived"
-		}
+		r.Result = r.finalResult()
 	default:
 		h.Income = r.income(h.Won)
 		r.Budget += h.Income
@@ -694,6 +701,24 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 	}
 	r.History = append(r.History, h)
 	return res, &h, nil
+}
+
+// finalResult is how the season ends, from the final league position.
+func (r *Run) finalResult() string {
+	pos := 0
+	if r.League != nil {
+		pos = r.League.Position()
+	}
+	switch {
+	case pos == 1:
+		return "champion"
+	case pos >= 2 && pos <= EuropePlaces:
+		return "europe"
+	case pos >= RelegatedPlace:
+		return "relegated"
+	default:
+		return "survived"
+	}
 }
 
 // RunView is everything the client is allowed to know.
@@ -726,7 +751,9 @@ type RunView struct {
 	InterestMax  int            `json:"interestMax"`
 	Augments     []string       `json:"augments"`
 	AugmentOffer []string       `json:"augmentOffer"`
-	LossCost     [2]int         `json:"lossCost"`         // patience a defeat in the next match costs: by one goal, by three or more
+	LossCost     [2]int         `json:"lossCost"` // patience a defeat in the next match costs: by one goal, by three or more
+	Draws        int            `json:"draws"`
+	League       *LeagueView    `json:"league,omitempty"` // solo: the table and the matchday's results
 	Event        *StoryEvent    `json:"event,omitempty"`  // solo: the club event waiting for an answer
 	Pledge       string         `json:"pledge,omitempty"` // solo: a promise the next match will judge
 }
@@ -743,7 +770,10 @@ func (r *Run) View() RunView {
 		Augments: r.Augments, AugmentOffer: r.AugmentOffer,
 		LossCost: [2]int{r.lessened(SoloDamage(r.Round, 1)), r.lessened(SoloDamage(r.Round, 3))},
 	}
-	v.Event, v.Pledge = r.storyView(), r.Pledge
+	v.Event, v.Pledge, v.Draws = r.storyView(), r.Pledge, r.Draws
+	if r.League != nil {
+		v.League = r.League.view()
+	}
 	if v.Augments == nil {
 		v.Augments = []string{}
 	}

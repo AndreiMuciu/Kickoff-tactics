@@ -6,6 +6,7 @@ import { MatchMarket } from './Market'
 import MatchView from './MatchView'
 import type { Photos } from './photos'
 import { EPILOGUE, INTRO, PLEDGES, RIVALS, reaction } from './story'
+import { LeagueTable, Results, ord } from './League'
 
 type MatchStage =
   | { stage: 'h1'; h1: HalfData }
@@ -130,11 +131,16 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
         </button>
         <h1>Kickoff Tactics</h1>
         <div className="chip">
-          Fixture{' '}
+          Matchday{' '}
           <b>
             {Math.min(run.round, run.maxRounds)}/{run.maxRounds}
           </b>
         </div>
+        {run.league && (
+          <div className="chip" title="League points and position">
+            <b>{run.league.points}</b> pts · <b>{run.league.played ? ord(run.league.position) : '–'}</b>
+          </div>
+        )}
         <div className="chip patience" title="The owner's patience. At zero you are sacked.">
           <span>Owner's patience</span>
           <div className="bar">
@@ -145,7 +151,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
         <div className="chip">
           Record{' '}
           <b>
-            {run.wins}W {run.losses}L
+            {run.wins}W {run.draws}D {run.losses}L
           </b>
         </div>
         {run.pledge && PLEDGES[run.pledge] && (
@@ -188,10 +194,16 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
                 {RIVALS[run.opponent.name] && <p className="muted">{RIVALS[run.opponent.name]}</p>}
               </div>
             )}
-            <h3>Season</h3>
+            {run.league && (
+              <>
+                <h3>League table</h3>
+                <LeagueTable league={run.league} compact />
+              </>
+            )}
+            <h3>Your results</h3>
             {run.history.length === 0 && <p className="muted">Your first match awaits.</p>}
             {run.history.map((h) => (
-              <p key={h.round} className={h.won ? 'win' : 'loss'}>
+              <p key={h.round} className={h.won ? 'win' : h.draw ? 'draw' : 'loss'}>
                 {h.round}. {h.opponent}{' '}
                 <b>
                   {h.gf}–{h.ga}
@@ -246,17 +258,29 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
           )}
           {match.stage === 'result' && match.h2.result && (
             <div className="dialog">
-              <h2 className={match.h2.result.won ? 'win' : 'loss'}>
-                {match.h2.result.won ? 'Victory!' : 'Defeat'} · {match.h2.score[0]} : {match.h2.score[1]}
+              <h2 className={match.h2.result.won ? 'win' : match.h2.result.draw ? 'draw' : 'loss'}>
+                {match.h2.result.won ? 'Victory!' : match.h2.result.draw ? 'Draw' : 'Defeat'} · {match.h2.score[0]} : {match.h2.score[1]}
               </h2>
               <Shootout data={match.h2} />
               <StatsTable data={match.h2} />
               <p className="owner-says">{reaction(match.h2.result.won, match.h2.result.gf, match.h2.result.ga, match.h2.result.round)}</p>
               <p>
-                {match.h2.result.won ? 'The owner is smiling.' : `The owner's patience drops by ${match.h2.result.damage}.`}
+                {match.h2.result.won ? '+3 points. The owner is smiling.' : match.h2.result.draw ? '+1 point. No harm to the owner’s patience.' : `No points, and the owner's patience drops by ${match.h2.result.damage}.`}
                 {match.h2.result.income > 0 && ` Budget received: +${match.h2.result.income} 💰.`}
               </p>
               {match.h2.result.note && <p className="story-note">📰 {match.h2.result.note}</p>}
+              {match.h2.run.league && match.h2.run.league.last.length > 0 && (
+                <div className="matchday">
+                  <div>
+                    <h3>Matchday {match.h2.run.league.played}: other results</h3>
+                    <Results results={match.h2.run.league.last} />
+                  </div>
+                  <div>
+                    <h3>Table</h3>
+                    <LeagueTable league={match.h2.run.league} compact />
+                  </div>
+                </div>
+              )}
               {!!match.h2.unlocked?.length && (
                 <p className="ach-unlocked">🏅 Achievement unlocked: {match.h2.unlocked.map((a) => `${a.icon} ${a.name}`).join(', ')}</p>
               )}
@@ -283,9 +307,15 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
             <h2>{EPILOGUE[run.result]?.title}</h2>
             <p>{EPILOGUE[run.result]?.text}</p>
             <p>
-              Record: {run.wins} wins, {run.losses} defeats.
+              {run.league && run.result !== 'sacked' && (
+                <>
+                  Final position: <b>{ord(run.league.position)}</b> with <b>{run.league.points}</b> points.{' '}
+                </>
+              )}
+              Record: {run.wins} wins, {run.draws} draws, {run.losses} defeats.
               {last && ` Last match: ${last.gf}–${last.ga} against ${last.opponent}.`}
             </p>
+            {run.league && <LeagueTable league={run.league} />}
             <div className="row center-row">
               <button onClick={onHome}>← Home</button>
               <button className="primary big" disabled={busy} onClick={newRun}>

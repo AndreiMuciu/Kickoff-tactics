@@ -81,6 +81,34 @@ export interface HistoryEntry {
   seed: string
   commit: string
   note?: string // what came of a promise made before the match
+  draw?: boolean // solo league: level at full time
+}
+export interface LeagueTeam {
+  name: string
+  you?: boolean
+  p: number
+  w: number
+  d: number
+  l: number
+  gf: number
+  ga: number
+  pts: number
+}
+export interface LeagueResult {
+  round: number
+  home: string
+  away: string
+  hg: number
+  ag: number
+}
+export interface LeagueView {
+  table: LeagueTeam[]
+  last: LeagueResult[] // the latest matchday's results
+  played: number
+  position: number
+  points: number
+  europe: number // last European place
+  relegate: number // first relegation place
 }
 export interface StoryChoice {
   label: string
@@ -123,6 +151,8 @@ export interface RunView {
   augments?: string[]
   augmentOffer?: string[]
   lossCost?: [number, number] // patience a defeat in the next match costs: by one goal, by three or more
+  draws: number
+  league?: LeagueView // solo: the table
   event?: StoryEvent // solo: a club event waiting for an answer
   pledge?: string // solo: a promise the next match will judge (win | big_win | clean)
 }
@@ -181,9 +211,12 @@ export interface SeasonSummary {
   round: number
   maxRounds: number
   wins: number
+  draws: number
   losses: number
   patience: number
   result: string
+  points: number // league points
+  position: number // league position, 1-10
 }
 export interface Me {
   name: string
@@ -192,6 +225,7 @@ export interface Me {
   hasSquad: boolean
   season: SeasonSummary | null
   newAchievements: number
+  askFeedback: boolean // a week has passed: ask whether there is anything to say about the game
 }
 export interface Achievement {
   id: string
@@ -236,6 +270,7 @@ export interface MatchLine {
   ga: number
   pens?: boolean
   won: boolean
+  draw?: boolean
 }
 export interface GameRecord {
   id: string
@@ -248,6 +283,7 @@ export interface GameRecord {
   points?: number
   opponent?: string
   wins: number
+  draws?: number
   losses: number
   matches: MatchLine[]
 }
@@ -426,6 +462,7 @@ export const api = {
   profile: (name?: string) => call<ProfileView>('GET', name ? `/api/profile?name=${encodeURIComponent(name)}` : '/api/profile'),
   history: (page: number) => call<HistoryPage>('GET', `/api/history?page=${page}`),
   achievementsSeen: () => call<{ ok: boolean }>('POST', '/api/achievements/seen', {}),
+  feedbackLater: () => call<{ ok: boolean }>('POST', '/api/feedback/later', {}),
   feedback: (kind: 'idea' | 'bug' | 'other', text: string, screen: string) =>
     call<{ ok: boolean; unlocked: Achievement[] }>('POST', '/api/feedback', { kind, text, screen }),
   changePassword: (current: string, next: string) => call<{ ok: boolean }>('POST', '/api/profile/password', { current, new: next }),
