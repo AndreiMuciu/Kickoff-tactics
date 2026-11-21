@@ -137,6 +137,9 @@ export default function Series({ id, kind, meta, photos, onClose, notify, specta
   const marketOpen = view.status === 'live' && (!lobby || !!view.alive) && view.phase !== 'done' && view.phase !== 'waiting'
   const me = view.standings?.find((s) => s.you)
   const out = lobby && view.status === 'live' && !view.alive && !!view.place
+  // The last match settles before the lobby is marked done: once nobody is
+  // left in, the lobby is over even while its result is still on screen.
+  const lobbyOver = view.status !== 'live' || !view.standings?.some((st) => st.alive)
   const data = match.current.data
 
   const act = async (a: Action) => {
@@ -447,12 +450,12 @@ export default function Series({ id, kind, meta, photos, onClose, notify, specta
             ) : (
               <p className="muted">No points at stake in this lobby: your rating did not change.</p>
             )}
-            {view.status === 'done' && view.place !== 1 && view.standings?.find((st) => st.place === 1) && (
+            {lobbyOver && view.place !== 1 && view.standings?.find((st) => st.place === 1) && (
               <p className="winner-line">
                 🏆 Lobby winner: <b>{view.standings.find((st) => st.place === 1)!.name}</b>
               </p>
             )}
-            {view.status === 'live' && (
+            {!lobbyOver && (
               <p className="muted">
                 Still playing: {view.standings?.filter((st) => st.alive).map((st) => st.name).join(', ')}. Keep watching to see who wins; this
                 list updates when the lobby ends.
@@ -469,7 +472,7 @@ export default function Series({ id, kind, meta, photos, onClose, notify, specta
               ))}
             </div>
             <div className="row center-row">
-              {view.status === 'live' && (
+              {!lobbyOver && (
                 <button className="big" onClick={() => setStay(true)} title="Stay and watch the managers still in">
                   👁 Keep watching
                 </button>

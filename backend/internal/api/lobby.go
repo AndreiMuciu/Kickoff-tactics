@@ -663,7 +663,7 @@ func (s *Server) rankedGet(w http.ResponseWriter, r *http.Request, uid string) {
 		if lb := s.playingLobby(r.Context(), uid); lb != nil {
 			v.LobbyID, v.Queued = lb.ID, false
 		} else if lb, err := s.st.ActiveLobby(r.Context(), uid); err == nil && lb.Status == "live" && now.Sub(lobbyClock(lb).roundEnd) < abandonedFor {
-			if seat := seatOf(lb, uid); seat >= 0 && !lb.Seats[seat].Alive {
+			if seat := seatOf(lb, uid); seat >= 0 && !lb.Seats[seat].Alive && len(aliveSeats(lb)) > 0 {
 				v.WatchLobby, v.WatchPlace = lb.ID, lb.Seats[seat].Place
 			}
 		}
