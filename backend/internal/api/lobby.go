@@ -147,7 +147,7 @@ func fillRanked(entries []store.QueueEntry, now time.Time) []int {
 	return append([]int{first}, others[:min(len(others), lobbySize-1)]...)
 }
 
-var botNames = []string{"Bot Mourinho", "Bot Guardiola", "Bot Ancelotti", "Bot Klopp", "Bot Lucescu", "Bot Simeone", "Bot Bielsa", "Bot Iordănescu"}
+var botNames = []string{"Bot Mourinho", "Bot Guardiola", "Bot Ancelotti", "Bot Klopp", "Bot Lucescu", "Bot Simeone", "Bot Bielsa", "Bot Ferguson"}
 
 func lobbyRunKey(lobbyID string, seat int) string {
 	return "lb:" + lobbyID + ":" + strconv.Itoa(seat)
