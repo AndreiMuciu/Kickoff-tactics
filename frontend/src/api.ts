@@ -227,16 +227,24 @@ export interface Me {
   newAchievements: number
   askFeedback: boolean // a week has passed: ask whether there is anything to say about the game
 }
+// A level just reached (toasts): Bronze the first time, then Silver, Gold, Platinum, Diamond.
 export interface Achievement {
   id: string
   icon: string
   name: string
-  desc: string
-  target: number
+  level: number
+  tier: string
 }
-export interface AchievementView extends Achievement {
-  progress: number
-  at?: number // unlock time (ms); absent while locked
+export interface AchievementView {
+  id: string
+  icon: string
+  name: string
+  desc: string // what the next level asks for
+  level: number // 0 locked, 1 Bronze ... 5 Diamond
+  count: number
+  next: number // count the next level needs; 0 at Diamond
+  levels: number[] // count of every level
+  at: number[] // unlock time of each reached level (ms)
   new?: boolean
 }
 export interface RankedSeason {

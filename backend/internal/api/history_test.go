@@ -84,13 +84,13 @@ func TestFeedbackAndAchievement(t *testing.T) {
 		t.Fatalf("unknown kind: %d", code)
 	}
 	var ok struct {
-		Unlocked []achievement `json:"unlocked"`
+		Unlocked []unlockedView `json:"unlocked"`
 	}
 	text := "Please add a replay button after each match, Ștefan says hi."
 	if code := call(t, c, "POST", ts.URL+"/api/feedback", map[string]string{"kind": "idea", "text": text, "screen": "home"}, &ok); code != 200 {
 		t.Fatalf("feedback: %d", code)
 	}
-	if len(ok.Unlocked) != 1 || ok.Unlocked[0].ID != "feedback" {
+	if len(ok.Unlocked) != 1 || ok.Unlocked[0].ID != "feedback" || ok.Unlocked[0].Tier != "Bronze" {
 		t.Fatalf("unlocked: %+v", ok.Unlocked)
 	}
 	// The mail goes out in the background.
@@ -121,8 +121,8 @@ func TestFeedbackAndAchievement(t *testing.T) {
 		t.Fatalf("profile lists %d achievements", len(p.Achievements))
 	}
 	for _, a := range p.Achievements {
-		if (a.ID == "feedback") != (a.At > 0) {
-			t.Fatalf("achievement %s unlocked at %d", a.ID, a.At)
+		if (a.ID == "feedback") != (a.Level == 1) || len(a.At) != a.Level {
+			t.Fatalf("achievement %s at level %d (%v)", a.ID, a.Level, a.At)
 		}
 	}
 }

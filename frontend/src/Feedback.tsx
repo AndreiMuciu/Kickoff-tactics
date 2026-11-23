@@ -37,7 +37,7 @@ export default function Feedback({ screen, ask, onAsked }: { screen: string; ask
     setMsg(null)
     try {
       const r = await api.feedback(kind, text.trim(), screen)
-      const got = r.unlocked.map((a) => `${a.icon} ${a.name}`).join(', ')
+      const got = r.unlocked.map((a) => `${a.icon} ${a.name} (${a.tier})`).join(', ')
       setMsg({ ok: true, text: `Thank you! We read every message.${got ? ` Achievement unlocked: ${got}.` : ''}` })
       setText('')
     } catch (err) {

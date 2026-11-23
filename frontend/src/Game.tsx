@@ -189,7 +189,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
             {run.phase === 'shop' && (
               <div className="rival">
                 <h3>
-                  Fixture {run.round}: {run.opponent.name}
+                  Matchday {run.round}: {run.opponent.name}
                 </h3>
                 {RIVALS[run.opponent.name] && <p className="muted">{RIVALS[run.opponent.name]}</p>}
               </div>
@@ -282,7 +282,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
                 </div>
               )}
               {!!match.h2.unlocked?.length && (
-                <p className="ach-unlocked">🏅 Achievement unlocked: {match.h2.unlocked.map((a) => `${a.icon} ${a.name}`).join(', ')}</p>
+                <p className="ach-unlocked">🏅 Achievement unlocked: {match.h2.unlocked.map((a) => `${a.icon} ${a.name} (${a.tier})`).join(', ')}</p>
               )}
               <button
                 className="primary"

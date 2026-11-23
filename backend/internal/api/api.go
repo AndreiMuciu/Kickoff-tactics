@@ -426,7 +426,7 @@ type halfResponse struct {
 	Names  [2]string          `json:"names"`
 	Run    game.RunView       `json:"run"`
 	// Achievements this match unlocked.
-	Unlocked []achievement `json:"unlocked,omitempty"`
+	Unlocked []unlockedView `json:"unlocked,omitempty"`
 }
 
 func (s *Server) startMatch(w http.ResponseWriter, r *http.Request, sid string) {

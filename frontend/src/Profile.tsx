@@ -45,36 +45,52 @@ function outcome(g: GameRecord): { text: string; good: boolean } {
   }
 }
 
+const LEVELS = ['Locked', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond']
+
 function Achievements({ list }: { list: AchievementView[] }) {
-  const done = list.filter((a) => a.at).length
+  const reached = list.reduce((n, a) => n + a.level, 0)
+  const latest = (a: AchievementView) => (a.at.length ? a.at[a.at.length - 1] : 0)
+  const sorted = [...list].sort((x, y) => y.level - x.level || latest(y) - latest(x))
   return (
     <>
       <p className="muted">
-        {done} of {list.length} unlocked
+        {reached} of {list.length * 5} levels · Bronze the first time, then Silver, Gold, Platinum and Diamond as you repeat it
       </p>
       <div className="ach-grid">
-        {[...list.filter((a) => a.at).sort((x, y) => (y.at ?? 0) - (x.at ?? 0)), ...list.filter((a) => !a.at)].map((a) => (
-          <div key={a.id} className={`ach ${a.at ? 'got' : ''} ${a.new ? 'new' : ''}`} title={a.at ? `Unlocked ${day(a.at)}` : a.desc}>
-            <span className="ach-icon">{a.icon}</span>
-            <b>{a.name}</b>
-            <small>{a.desc}</small>
-            {a.at ? (
-              <small className="ach-when">
-                {a.new ? '✨ New · ' : ''}
-                {day(a.at)}
-              </small>
-            ) : a.target > 1 ? (
-              <div className="ach-bar" aria-label={`${a.progress} of ${a.target}`}>
-                <i style={{ width: `${(a.progress / a.target) * 100}%` }} />
-                <small>
-                  {a.progress}/{a.target}
-                </small>
+        {sorted.map((a) => {
+          const from = a.level ? a.levels[a.level - 1] : 0
+          const pct = a.next ? Math.min(100, ((a.count - from) / Math.max(1, a.next - from)) * 100) : 100
+          return (
+            <div
+              key={a.id}
+              className={`ach lvl-${a.level} ${a.level ? 'got' : ''} ${a.new ? 'new' : ''}`}
+              title={a.at.map((t, i) => `${LEVELS[i + 1]}: ${day(t)}`).join('\n') || a.desc}
+            >
+              <div className="ach-top">
+                <span className="ach-icon">{a.icon}</span>
+                <span className={`ach-tier t${a.level}`}>
+                  {a.new ? '✨ ' : ''}
+                  {LEVELS[a.level]}
+                </span>
               </div>
-            ) : (
-              <small className="ach-when">🔒 Locked</small>
-            )}
-          </div>
-        ))}
+              <b>{a.name}</b>
+              <small>{a.level === 5 ? `Maxed: ${a.desc.replace(/\.$/, '')} ✔` : a.desc}</small>
+              <div className="ach-pips" aria-label={`${LEVELS[a.level]}, level ${a.level} of 5`}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <i key={n} className={n <= a.level ? `on t${n}` : ''} title={`${LEVELS[n]}: ${a.levels[n - 1]}`} />
+                ))}
+              </div>
+              {a.next > 0 && (
+                <div className="ach-bar" aria-label={`${a.count} of ${a.next}`}>
+                  <i style={{ width: `${pct}%` }} />
+                  <small>
+                    {a.count}/{a.next} → {LEVELS[a.level + 1]}
+                  </small>
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </>
   )

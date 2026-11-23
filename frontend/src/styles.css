@@ -564,3 +564,24 @@ button.danger:disabled { opacity: .5; cursor: not-allowed; }
 .matchday h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 0 0 6px; }
 @media (max-width: 700px) { .matchday { grid-template-columns: 1fr; } }
 .dialog.feedback.ask { width: min(480px, 100%); }
+
+/* Achievement levels */
+.ach-top { display: flex; justify-content: space-between; align-items: center; }
+.ach-tier { font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--panel); color: var(--muted); }
+.ach-tier.t1 { color: #f0b98a; background: rgba(205, 127, 50, .2); }
+.ach-tier.t2 { color: #e5e7eb; background: rgba(192, 192, 192, .2); }
+.ach-tier.t3 { color: var(--gold); background: rgba(253, 224, 71, .18); }
+.ach-tier.t4 { color: #a5f3fc; background: rgba(103, 232, 249, .16); }
+.ach-tier.t5 { color: #c4b5fd; background: rgba(167, 139, 250, .22); }
+.ach.lvl-1 { border-color: rgba(205, 127, 50, .55); }
+.ach.lvl-2 { border-color: rgba(192, 192, 192, .6); }
+.ach.lvl-3 { border-color: rgba(253, 224, 71, .6); }
+.ach.lvl-4 { border-color: rgba(103, 232, 249, .55); }
+.ach.lvl-5 { border-color: rgba(167, 139, 250, .7); box-shadow: 0 0 16px -6px rgba(167, 139, 250, .8); }
+.ach-pips { display: flex; gap: 4px; }
+.ach-pips i { flex: 1; height: 5px; border-radius: 3px; background: var(--panel); }
+.ach-pips i.on.t1 { background: #cd7f32; }
+.ach-pips i.on.t2 { background: #c0c0c0; }
+.ach-pips i.on.t3 { background: var(--gold); }
+.ach-pips i.on.t4 { background: #67e8f9; }
+.ach-pips i.on.t5 { background: #a78bfa; }

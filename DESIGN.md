@@ -464,13 +464,15 @@ account (`plan`), so it is the same in a solo season, a live series and every lo
 
 ## Profile, achievements, history, feedback [in demo]
 
-- **Achievements** (25, `api/achievements.go`): counters reaching a target (first win, 50 wins,
-  100 matches, 100 goals, 3-goal win, 10 clean sheets, five wins in a row in one game, a three-star
-  player, stadium level 10, solo survival / title / five titles / all eight fixtures won, lobbies,
-  top 4, lobby wins, ranked lobbies, live series won, feedback sent) or a division reached. Decided
-  on the server whenever counters change, stored with their date (`achieved`), never taken back.
-  Unseen ones are counted on Home (🏅 n) and marked new in the profile, which marks them seen.
-  A solo match result names the achievements it unlocked.
+- **Achievements** (19, `api/achievements.go`), each with five levels (2026-11-23): Bronze the first
+  time, then Silver, Gold, Platinum and Diamond as the same feat repeats (e.g. wins 1/10/50/150/500,
+  league titles 1/3/10/25/50, Invincibles and Perfect Season 1/2/5/10/25, Climber = ranked points
+  100/250/450/700/1000). A level is stored with its date under `<id>` (Bronze) or `<id>@<n>`;
+  achievements from before levels (wins_50, champion_5, top4_10, lobby_win_5, silver/gold/
+  platinum/diamond) became levels of the merged ones and keep their dates (`oldKeys`). Decided on
+  the server whenever counters change, never taken back. Unseen levels are counted on Home (🏅 n)
+  and marked new in the profile, which marks them seen. A solo match result and a feedback message
+  name the levels they unlocked.
 - **Match history** (`games` collection, one document per finished game: solo season, lobby or
   series, with its matches): profile tab, 10 per page, newest first (`GET /api/history?page=`).
 - **Friend profiles**: clicking a friend's name opens his profile (overview and achievements,

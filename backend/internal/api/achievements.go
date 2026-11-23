@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,47 +14,51 @@ import (
 	"footy/internal/store"
 )
 
-// An achievement is unlocked when one of the manager's counters reaches a
-// target, or (Tier) when his ranked points reach a division. Unlocking is
-// decided on the server only and stored with its date, so it is never lost
-// when points later drop.
+// An achievement has five levels: Bronze the first time, then Silver, Gold,
+// Platinum and Diamond as the same feat is repeated (`Levels` are the counts
+// that reach each one). A level is decided on the server only and stored
+// with its date (key "<id>" for Bronze, "<id>@<n>" above), so it is never
+// lost, not even when ranked points later drop.
 type achievement struct {
 	ID     string `json:"id"`
 	Icon   string `json:"icon"`
 	Name   string `json:"name"`
-	Desc   string `json:"desc"`
+	One    string `json:"-"` // what Bronze asks for when it is a single feat
+	Many   string `json:"-"` // the same with %d, for a count
 	Stat   string `json:"-"`
-	Target int    `json:"target"`
-	Tier   string `json:"-"` // the division to reach, instead of a counter
+	Rating bool   `json:"-"` // measured in ranked points instead of a counter
+	Levels [5]int `json:"levels"`
 }
 
+var levelNames = [6]string{"", "Bronze", "Silver", "Gold", "Platinum", "Diamond"}
+
 var achievements = []achievement{
-	{ID: "first_win", Icon: "⚽", Name: "First Win", Desc: "Win a match.", Stat: "wins", Target: 1},
-	{ID: "wins_50", Icon: "💪", Name: "Habit of Winning", Desc: "Win 50 matches.", Stat: "wins", Target: 50},
-	{ID: "matches_100", Icon: "🏟", Name: "Centurion", Desc: "Play 100 matches.", Stat: "matches", Target: 100},
-	{ID: "goals_100", Icon: "🎯", Name: "Goal Machine", Desc: "Score 100 goals.", Stat: "gf", Target: 100},
-	{ID: "big_win", Icon: "💥", Name: "Thrashing", Desc: "Win a match by three goals or more.", Stat: "bigWins", Target: 1},
-	{ID: "clean_10", Icon: "🧱", Name: "Brick Wall", Desc: "Keep 10 clean sheets.", Stat: "cleanSheets", Target: 10},
-	{ID: "streak_5", Icon: "🔥", Name: "On Fire", Desc: "Win five matches in a row in one game.", Stat: "streak5", Target: 1},
-	{ID: "three_star", Icon: "⭐", Name: "Legend Built", Desc: "Finish a game with a three-star player.", Stat: "threeStars", Target: 1},
-	{ID: "full_house", Icon: "🏗", Name: "Full House", Desc: "Finish a game with the stadium at level 10.", Stat: "fullStadiums", Target: 1},
-	{ID: "season", Icon: "📅", Name: "Survivor", Desc: "Finish a solo season without being sacked.", Stat: "seasonsSurvived", Target: 1},
-	{ID: "champion", Icon: "🏆", Name: "Champions!", Desc: "Win the solo league.", Stat: "titles", Target: 1},
-	{ID: "champion_5", Icon: "🏛", Name: "Dynasty", Desc: "Win the solo league five times.", Stat: "titles", Target: 5},
-	{ID: "unbeaten", Icon: "🛡", Name: "Invincibles", Desc: "Win the solo league without losing a match.", Stat: "unbeatenTitles", Target: 1},
-	{ID: "perfect", Icon: "👑", Name: "Perfect Season", Desc: "Win every match of a solo season.", Stat: "perfectSeasons", Target: 1},
-	{ID: "lobby", Icon: "🎟", Name: "Debut", Desc: "Finish a lobby.", Stat: "lobbies", Target: 1},
-	{ID: "top4", Icon: "4️⃣", Name: "Top Four", Desc: "Finish a lobby in the top 4.", Stat: "lobbyTop4", Target: 1},
-	{ID: "top4_10", Icon: "📈", Name: "Consistent", Desc: "Finish in the top 4 ten times.", Stat: "lobbyTop4", Target: 10},
-	{ID: "lobby_win", Icon: "🥇", Name: "Last One Standing", Desc: "Win a lobby.", Stat: "lobbyWins", Target: 1},
-	{ID: "lobby_win_5", Icon: "🎖", Name: "Serial Winner", Desc: "Win five lobbies.", Stat: "lobbyWins", Target: 5},
-	{ID: "ranked_10", Icon: "🎮", Name: "Ranked Regular", Desc: "Finish 10 ranked lobbies.", Stat: "ranked", Target: 10},
-	{ID: "silver", Icon: "🥈", Name: "Silver", Desc: "Reach the Silver division.", Tier: "Silver", Target: 1},
-	{ID: "gold", Icon: "🥇", Name: "Gold", Desc: "Reach the Gold division.", Tier: "Gold", Target: 1},
-	{ID: "platinum", Icon: "💠", Name: "Platinum", Desc: "Reach the Platinum division.", Tier: "Platinum", Target: 1},
-	{ID: "diamond", Icon: "💎", Name: "Diamond", Desc: "Reach the Diamond division.", Tier: "Diamond", Target: 1},
-	{ID: "series_win", Icon: "🤝", Name: "Bragging Rights", Desc: "Win a live series against a friend.", Stat: "seriesWins", Target: 1},
-	{ID: "feedback", Icon: "💬", Name: "Suggestion Box", Desc: "Send feedback from the game.", Stat: "feedback", Target: 1},
+	{ID: "first_win", Icon: "⚽", Name: "Winner", One: "Win a match.", Many: "Win %d matches.", Stat: "wins", Levels: [5]int{1, 10, 50, 150, 500}},
+	{ID: "matches_100", Icon: "🏟", Name: "Regular", Many: "Play %d matches.", Stat: "matches", Levels: [5]int{10, 50, 100, 250, 1000}},
+	{ID: "goals_100", Icon: "🎯", Name: "Goal Machine", Many: "Score %d goals.", Stat: "gf", Levels: [5]int{10, 50, 100, 250, 1000}},
+	{ID: "big_win", Icon: "💥", Name: "Thrashing", One: "Win a match by three goals or more.", Many: "Win %d matches by three goals or more.", Stat: "bigWins", Levels: [5]int{1, 5, 15, 40, 100}},
+	{ID: "clean_10", Icon: "🧱", Name: "Brick Wall", One: "Keep a clean sheet.", Many: "Keep %d clean sheets.", Stat: "cleanSheets", Levels: [5]int{1, 10, 25, 60, 150}},
+	{ID: "streak_5", Icon: "🔥", Name: "On Fire", One: "Win five matches in a row in one game.", Many: "Win five in a row in %d games.", Stat: "streak5", Levels: [5]int{1, 3, 10, 25, 50}},
+	{ID: "three_star", Icon: "⭐", Name: "Legend Built", One: "Finish a game with a three-star player.", Many: "Finish %d games with a three-star player.", Stat: "threeStars", Levels: [5]int{1, 3, 10, 25, 50}},
+	{ID: "full_house", Icon: "🏗", Name: "Full House", One: "Finish a game with the stadium at level 10.", Many: "Finish %d games with the stadium at level 10.", Stat: "fullStadiums", Levels: [5]int{1, 3, 10, 25, 50}},
+	{ID: "season", Icon: "📅", Name: "Survivor", One: "Finish a solo season without being sacked.", Many: "Finish %d solo seasons without being sacked.", Stat: "seasonsSurvived", Levels: [5]int{1, 5, 15, 40, 100}},
+	{ID: "champion", Icon: "🏆", Name: "Champions!", One: "Win the solo league.", Many: "Win the solo league %d times.", Stat: "titles", Levels: [5]int{1, 3, 10, 25, 50}},
+	{ID: "unbeaten", Icon: "🛡", Name: "Invincibles", One: "Win the solo league without losing a match.", Many: "Win the solo league unbeaten %d times.", Stat: "unbeatenTitles", Levels: [5]int{1, 2, 5, 10, 25}},
+	{ID: "perfect", Icon: "👑", Name: "Perfect Season", One: "Win every match of a solo season.", Many: "Win every match of a solo season %d times.", Stat: "perfectSeasons", Levels: [5]int{1, 2, 5, 10, 25}},
+	{ID: "lobby", Icon: "🎟", Name: "Lobby Regular", One: "Finish a lobby.", Many: "Finish %d lobbies.", Stat: "lobbies", Levels: [5]int{1, 10, 50, 150, 500}},
+	{ID: "top4", Icon: "4️⃣", Name: "Top Four", One: "Finish a lobby in the top 4.", Many: "Finish in the top 4 %d times.", Stat: "lobbyTop4", Levels: [5]int{1, 10, 50, 150, 500}},
+	{ID: "lobby_win", Icon: "🥇", Name: "Last One Standing", One: "Win a lobby.", Many: "Win %d lobbies.", Stat: "lobbyWins", Levels: [5]int{1, 5, 20, 50, 150}},
+	{ID: "ranked_10", Icon: "🎮", Name: "Ranked Regular", One: "Finish a ranked lobby.", Many: "Finish %d ranked lobbies.", Stat: "ranked", Levels: [5]int{1, 10, 50, 150, 500}},
+	{ID: "climber", Icon: "🧗", Name: "Climber", Many: "Reach %d ranked points.", Rating: true, Levels: [5]int{100, 250, 450, 700, 1000}},
+	{ID: "series_win", Icon: "🤝", Name: "Bragging Rights", One: "Win a live series against a friend.", Many: "Win %d live series against friends.", Stat: "seriesWins", Levels: [5]int{1, 5, 20, 50, 150}},
+	{ID: "feedback", Icon: "💬", Name: "Suggestion Box", One: "Send feedback from the game.", Many: "Send feedback %d times.", Stat: "feedback", Levels: [5]int{1, 3, 10, 25, 50}},
+}
+
+// oldKeys are achievements from before levels, now a level of another one:
+// their unlock date carries over.
+var oldKeys = map[string]string{
+	"first_win@3": "wins_50", "champion@2": "champion_5", "top4@2": "top4_10", "lobby_win@2": "lobby_win_5",
+	"climber": "silver", "climber@2": "gold", "climber@3": "platinum", "climber@4": "diamond",
 }
 
 var achievementByID = func() map[string]achievement {
@@ -64,22 +69,44 @@ var achievementByID = func() map[string]achievement {
 	return m
 }()
 
-// progress is how far the manager is towards an achievement, capped at its target.
-func progress(a achievement, u *store.User) int {
-	if a.Tier != "" {
-		rating := max(0, baseRating+u.LP)
-		for _, t := range tiers {
-			if t.Name == a.Tier && rating >= t.Min {
-				return 1
-			}
-		}
-		return 0
+// levelKey is where level n (1-5) of an achievement is stored.
+func levelKey(id string, n int) string {
+	if n == 1 {
+		return id
 	}
-	return min(u.Stats[a.Stat], a.Target)
+	return id + "@" + strconv.Itoa(n)
 }
 
-// recordStats adds to the manager's counters and unlocks every achievement
-// they now earn. It returns the ids unlocked by this call.
+// levelAt is when the manager reached level n, if he has.
+func levelAt(u *store.User, id string, n int) (time.Time, bool) {
+	key := levelKey(id, n)
+	if at, ok := u.Achieved[key]; ok {
+		return at, true
+	}
+	if old, ok := oldKeys[key]; ok {
+		at, ok := u.Achieved[old]
+		return at, ok
+	}
+	return time.Time{}, false
+}
+
+// count is the manager's number for an achievement.
+func count(a achievement, u *store.User) int {
+	if a.Rating {
+		return max(0, baseRating+u.LP)
+	}
+	return u.Stats[a.Stat]
+}
+
+func (a achievement) describe(target int) string {
+	if target == 1 && a.One != "" {
+		return a.One
+	}
+	return fmt.Sprintf(a.Many, target)
+}
+
+// recordStats adds to the manager's counters and unlocks every level they
+// now earn. It returns the level keys unlocked by this call.
 func (s *Server) recordStats(ctx context.Context, uid string, d map[string]int) []string {
 	if err := s.st.AddStats(ctx, uid, d); err != nil {
 		s.log.Error("stats update failed", "err", err)
@@ -88,7 +115,7 @@ func (s *Server) recordStats(ctx context.Context, uid string, d map[string]int) 
 	return s.unlock(ctx, uid)
 }
 
-// unlock stores the achievements the manager has earned but not yet received.
+// unlock stores the levels the manager has earned but not yet received.
 func (s *Server) unlock(ctx context.Context, uid string) []string {
 	u, err := s.st.UserByID(ctx, uid)
 	if err != nil {
@@ -96,11 +123,18 @@ func (s *Server) unlock(ctx context.Context, uid string) []string {
 	}
 	now := time.Now().UTC()
 	got := map[string]time.Time{}
-	var ids []string
+	var keys []string
 	for _, a := range achievements {
-		if _, had := u.Achieved[a.ID]; !had && progress(a, u) >= a.Target {
-			got[a.ID] = now
-			ids = append(ids, a.ID)
+		n := count(a, u)
+		for lvl := 1; lvl <= 5; lvl++ {
+			if n < a.Levels[lvl-1] {
+				break
+			}
+			if _, had := levelAt(u, a.ID, lvl); !had {
+				key := levelKey(a.ID, lvl)
+				got[key] = now
+				keys = append(keys, key)
+			}
 		}
 	}
 	if len(got) == 0 {
@@ -110,29 +144,47 @@ func (s *Server) unlock(ctx context.Context, uid string) []string {
 		s.log.Error("achievement update failed", "err", err)
 		return nil
 	}
-	return ids
+	return keys
 }
 
 type achievementView struct {
-	achievement
-	Progress int   `json:"progress"`
-	At       int64 `json:"at,omitempty"` // unlock time (ms), 0 while locked
-	New      bool  `json:"new,omitempty"`
+	ID     string  `json:"id"`
+	Icon   string  `json:"icon"`
+	Name   string  `json:"name"`
+	Desc   string  `json:"desc"`   // what the next level asks for (the last one once at Diamond)
+	Level  int     `json:"level"`  // 0 locked, 1 Bronze ... 5 Diamond
+	Count  int     `json:"count"`  // how many times so far
+	Next   int     `json:"next"`   // the count the next level needs; 0 at Diamond
+	Levels [5]int  `json:"levels"` // the count of every level
+	At     []int64 `json:"at"`     // when each reached level was unlocked (ms)
+	New    bool    `json:"new,omitempty"`
 }
 
 func achievementViews(u *store.User) []achievementView {
 	out := make([]achievementView, 0, len(achievements))
 	for _, a := range achievements {
-		v := achievementView{achievement: a, Progress: progress(a, u)}
-		if at, ok := u.Achieved[a.ID]; ok {
-			v.At, v.Progress, v.New = at.UnixMilli(), a.Target, at.After(u.AchSeen)
+		v := achievementView{ID: a.ID, Icon: a.Icon, Name: a.Name, Levels: a.Levels, Count: count(a, u), At: []int64{}}
+		for lvl := 1; lvl <= 5; lvl++ {
+			at, ok := levelAt(u, a.ID, lvl)
+			if !ok {
+				break
+			}
+			v.Level = lvl
+			v.At = append(v.At, at.UnixMilli())
+			v.New = v.New || at.After(u.AchSeen)
+		}
+		if v.Level < 5 {
+			v.Next = a.Levels[v.Level]
+			v.Desc = a.describe(v.Next)
+		} else {
+			v.Desc = a.describe(a.Levels[4])
 		}
 		out = append(out, v)
 	}
 	return out
 }
 
-// unseenAchievements counts achievements unlocked since the manager last looked.
+// unseenAchievements counts levels unlocked since the manager last looked.
 func unseenAchievements(u *store.User) int {
 	n := 0
 	for _, at := range u.Achieved {
@@ -143,10 +195,25 @@ func unseenAchievements(u *store.User) int {
 	return n
 }
 
-func views(ids []string) []achievement {
-	out := []achievement{}
-	for _, id := range ids {
-		out = append(out, achievementByID[id])
+// unlockedView is one level just reached, for a toast.
+type unlockedView struct {
+	ID    string `json:"id"`
+	Icon  string `json:"icon"`
+	Name  string `json:"name"`
+	Level int    `json:"level"`
+	Tier  string `json:"tier"` // Bronze ... Diamond
+}
+
+func views(keys []string) []unlockedView {
+	out := []unlockedView{}
+	for _, k := range keys {
+		id, lvl := k, 1
+		if i := strings.LastIndex(k, "@"); i > 0 {
+			id = k[:i]
+			lvl, _ = strconv.Atoi(k[i+1:])
+		}
+		a := achievementByID[id]
+		out = append(out, unlockedView{ID: id, Icon: a.Icon, Name: a.Name, Level: lvl, Tier: levelNames[lvl]})
 	}
 	return out
 }
