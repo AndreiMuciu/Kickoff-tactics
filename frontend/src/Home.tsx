@@ -153,6 +153,9 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
           )}{' '}
           ▾
         </button>
+        <button className="restart" onClick={() => setTutorial(true)} title="The rules in eight short steps">
+          📖 How to play
+        </button>
         <button className="restart" onClick={onLogout}>
           Log out
         </button>
@@ -204,9 +207,6 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
             )}
             <button className={inSeason ? 'big' : 'primary big'} title={inSeason ? 'Abandon this season and start a new one' : undefined} onClick={() => onPlay(true)}>
               {inSeason ? 'Abandon & start new' : 'New season ▶'}
-            </button>
-            <button className="big" onClick={() => setTutorial(true)} title="The rules in eight short steps">
-              📖 How to play
             </button>
           </div>
           <ul className="how">

@@ -504,7 +504,7 @@ account (`plan`), so it is the same in a solo season, a live series and every lo
 combinations, match day and orders, money and augments, ways to play). It opens by itself on Home
 for a manager who has not played a match yet (`/api/me` `newPlayer` = no `matches` stat) and has
 not closed it on this browser (localStorage `autofootball-tutorial-<name>`); Skip on every step,
-Esc and arrow keys work, and "📖 How to play" on Home opens it again.
+Esc and arrow keys work, and "📖 How to play" in the Home header opens it again.
 
 ## Profile, achievements, history, feedback [in demo]
 
