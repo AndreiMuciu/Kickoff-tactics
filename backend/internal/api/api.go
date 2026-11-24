@@ -102,6 +102,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/signup", s.signup)
 	mux.HandleFunc("POST /api/auth/login", s.login)
 	mux.HandleFunc("POST /api/auth/logout", s.logout)
+	mux.HandleFunc("POST /api/auth/guest", s.guest)
+	mux.HandleFunc("POST /api/auth/claim", s.auth(s.claim))
+	mux.HandleFunc("GET /api/daily", s.auth(s.daily))
 	mux.HandleFunc("POST /api/auth/verify", s.verifyEmail)
 	mux.HandleFunc("POST /api/auth/forgot", s.forgot)
 	mux.HandleFunc("POST /api/auth/reset", s.resetPassword)
@@ -266,6 +269,12 @@ func (s *Server) auth(next authed) http.HandlerFunc {
 		mu.(*sync.Mutex).Lock()
 		defer mu.(*sync.Mutex).Unlock()
 		s.touch(ctx, sid)
+		if r.Method != http.MethodGet && !guestAllowed(r.URL.Path) {
+			if u, err := s.st.UserByID(ctx, sid); err != nil || u.Guest {
+				writeErr(w, http.StatusForbidden, "Create an account to play with other managers. Your season comes with you.")
+				return
+			}
+		}
 		if r.Method == http.MethodGet || !social(r.URL.Path) {
 			next(w, r, sid)
 			return
@@ -346,8 +355,9 @@ func (s *Server) loadRun(ctx context.Context, owner string) (*game.Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	// A season from before the league (no table) cannot continue either.
-	if run.Stale() || run.League == nil {
+	// A season from before the league (no table) cannot continue either, nor
+	// yesterday's daily challenge: the day's table closed at midnight.
+	if run.Stale() || run.League == nil || (strings.HasPrefix(owner, "daily:") && run.Daily != today()) {
 		return nil, store.ErrNotFound
 	}
 	return run, nil
@@ -365,7 +375,7 @@ func (s *Server) meta(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) getRun(w http.ResponseWriter, r *http.Request, sid string) {
-	run, err := s.loadRun(r.Context(), sid)
+	run, err := s.loadRun(r.Context(), runOwner(r, sid))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -374,6 +384,15 @@ func (s *Server) getRun(w http.ResponseWriter, r *http.Request, sid string) {
 }
 
 func (s *Server) newRun(w http.ResponseWriter, r *http.Request, sid string) {
+	if runOwner(r, sid) != sid {
+		run, err := s.newDaily(r, sid)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		writeJSON(w, 201, run.View())
+		return
+	}
 	run, err := game.NewRun(sid)
 	if err != nil {
 		s.fail(w, r, err)
@@ -398,7 +417,7 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request, sid string) {
 	if !decode(w, r, &a) {
 		return
 	}
-	run, err := s.loadRun(r.Context(), sid)
+	run, err := s.loadRun(r.Context(), runOwner(r, sid))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -430,7 +449,7 @@ type halfResponse struct {
 }
 
 func (s *Server) startMatch(w http.ResponseWriter, r *http.Request, sid string) {
-	run, err := s.loadRun(r.Context(), sid)
+	run, err := s.loadRun(r.Context(), runOwner(r, sid))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -449,7 +468,7 @@ func (s *Server) startMatch(w http.ResponseWriter, r *http.Request, sid string) 
 }
 
 func (s *Server) getMatch(w http.ResponseWriter, r *http.Request, sid string) {
-	run, err := s.loadRun(r.Context(), sid)
+	run, err := s.loadRun(r.Context(), runOwner(r, sid))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -470,7 +489,7 @@ func (s *Server) secondHalf(w http.ResponseWriter, r *http.Request, sid string) 
 	if !decode(w, r, &body) {
 		return
 	}
-	run, err := s.loadRun(r.Context(), sid)
+	run, err := s.loadRun(r.Context(), runOwner(r, sid))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -516,6 +535,10 @@ func (s *Server) secondHalf(w http.ResponseWriter, r *http.Request, sid string) 
 			}
 			if run.Cup != nil {
 				g.Cup = run.Cup.ID + ":" + run.Cup.Out
+			}
+			if run.Daily != "" && run.League != nil {
+				me := run.League.Mine()
+				g.Mode, g.Day, g.GD = "daily", run.Daily, me.GF-me.GA
 			}
 			s.recordGame(r.Context(), g, run)
 		}

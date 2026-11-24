@@ -5,12 +5,14 @@ type Mode = 'login' | 'signup' | 'forgot' | 'reset'
 
 interface Props {
   invitedBy: string | null
+  challenger: string | null // opened from a daily-challenge link
+  onGuest: () => void // "Play now": a guest account, no form
   resetToken: string | null // set when the page was opened from a "reset your password" mail
   onResetDone: () => void
   onDone: (restored?: boolean) => void // restored: signing in cancelled a pending account deletion
 }
 
-export default function Auth({ invitedBy, resetToken, onResetDone, onDone }: Props) {
+export default function Auth({ invitedBy, challenger, onGuest, resetToken, onResetDone, onDone }: Props) {
   const [mode, setMode] = useState<Mode>(resetToken ? 'reset' : invitedBy ? 'signup' : 'login')
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
@@ -66,10 +68,40 @@ export default function Auth({ invitedBy, resetToken, onResetDone, onDone }: Pro
     <div className="center intro">
       <h1>Kickoff Tactics</h1>
       <p className="lead">Sign players, set them up on the pitch and watch them play. An auto-battler, with football.</p>
-      {invitedBy && (
+      {challenger ? (
         <p className="invite-note">
-          <b>{invitedBy}</b> invited you. Create an account and you will be connected.
+          ⚔️ <b>{challenger}</b> challenges you to today's daily challenge. Same start for both of you: can you score more points?
         </p>
+      ) : (
+        invitedBy && (
+          <p className="invite-note">
+            <b>{invitedBy}</b> invited you. Create an account and you will be connected.
+          </p>
+        )
+      )}
+      {mode !== 'reset' && (
+        <div className="play-now">
+          <button
+            className="primary big"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              setError(null)
+              try {
+                await api.guest()
+                onGuest()
+              } catch (err) {
+                setError(err instanceof ApiError ? err.message : "We can't reach the game right now. Try again in a moment.")
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            {challenger ? 'Accept the challenge ▶' : 'Play now ▶'}
+          </button>
+          <small className="muted">No account needed. Create one later to keep your progress and play with friends.</small>
+          <span className="or">or</span>
+        </div>
       )}
       <form className="auth" onSubmit={submit}>
         {(mode === 'login' || mode === 'signup') && (

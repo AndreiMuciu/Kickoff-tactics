@@ -29,6 +29,12 @@ function readMailLink(): { kind: 'verify' | 'reset'; token: string } | null {
 }
 const mailLink = readMailLink()
 
+// A challenge link looks like /?c=<username>: today's daily challenge, against them.
+function readChallenge(): string | null {
+  const v = new URLSearchParams(location.search).get('c')
+  return v && /^[A-Za-z0-9_]{3,20}$/.test(v) ? v : null
+}
+
 // The app has two addresses: "/" (the game, signed in) and "/login". Anything
 // else does not exist and says so, instead of quietly showing the home page.
 const ROUTES = ['/', '/login']
@@ -60,7 +66,7 @@ function CookieNotice() {
   return (
     <div className="cookie-bar" role="region" aria-label="Cookies">
       <span>
-        We use <b>one cookie</b>, to keep you signed in. No ads, no tracking. Player photos come from Wikimedia.
+        We use <b>one cookie</b>, to keep you signed in. No ads, no tracking cookies: visits are only counted anonymously. Player photos come from Wikimedia.
       </span>
       <button
         className="primary"
@@ -79,7 +85,7 @@ function CookieNotice() {
   )
 }
 
-type View = { at: 'home' } | { at: 'game'; fresh: boolean }
+type View = { at: 'home' } | { at: 'game'; fresh: boolean; daily?: boolean }
 
 export default function App() {
   const [meta, setMeta] = useState<Meta | null>(null)
@@ -89,6 +95,7 @@ export default function App() {
   const [view, setView] = useState<View>({ at: 'home' })
   const [toast, setToast] = useState<string | null>(null)
   const [invite, setInvite] = useState<string | null>(readInvite)
+  const [challenger] = useState<string | null>(readChallenge)
   const [live, setLive2] = useState<SeriesView | null>(null) // pending live-series invite
   const [liveId, setLiveId] = useState<string | null>(null) // series being played
   const [ranked, setRanked] = useState<RankedView | null>(null)
@@ -143,10 +150,10 @@ export default function App() {
 
   // Once signed in, an invite link turns into a friend request, exactly once.
   useEffect(() => {
-    if (!me || !invite) return
+    if (!me || me.guest || !invite) return
     const name = invite
     setInvite(null)
-    history.replaceState(null, '', '/')
+    history.replaceState(null, '', challenger ? `/?c=${challenger}` : '/')
     if (name.toLowerCase() === me.name.toLowerCase()) return
     api
       .friendRequest(name)
@@ -154,7 +161,8 @@ export default function App() {
       .catch((e) => notify(e instanceof ApiError ? e.message : 'Could not send the invite.'))
   }, [me, invite, notify])
 
-  const signedIn = !!me
+  // A guest plays alone: no live connection, lobbies or series to watch.
+  const signedIn = !!me && !me.guest
   // One WebSocket while signed in; everything below is pushed through it,
   // with polling as the fallback while it is down.
   useEffect(() => {
@@ -213,6 +221,8 @@ export default function App() {
       <>
         <Auth
           invitedBy={invite}
+          challenger={challenger}
+          onGuest={() => void loadMe()}
           resetToken={resetToken}
           onResetDone={() => {
             setResetToken(null)
@@ -279,10 +289,12 @@ export default function App() {
   return (
     <>
       {view.at === 'game' ? (
-        <Game key={String(view.fresh)} meta={meta} photos={photos} fresh={view.fresh} onHome={goHome} />
+        <Game key={`${view.fresh}-${!!view.daily}`} meta={meta} photos={photos} fresh={view.fresh} daily={!!view.daily} me={me} onHome={goHome} />
       ) : (
         <Home
           me={me}
+          challenger={challenger}
+          onDaily={() => setView({ at: 'game', fresh: false, daily: true })}
           ranked={ranked}
           onParty={(f) =>
             f()

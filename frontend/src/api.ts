@@ -199,6 +199,7 @@ export interface RunView {
   event?: StoryEvent // solo: a club event waiting for an answer
   pledge?: string // solo: a promise the next match will judge (win | big_win | clean)
   cup?: CupView // solo: the run in Europe after a top-four finish
+  daily?: string // the day of a daily challenge (league only)
 }
 export interface RosterEntry {
   idx: number
@@ -276,6 +277,28 @@ export interface Me {
   season: SeasonSummary | null
   newAchievements: number
   askFeedback: boolean // a week has passed: ask whether there is anything to say about the game
+  guest?: boolean // "Play now" without an account: solo and the daily challenge only, until claimed
+}
+// One line of today's daily-challenge table.
+export interface DailyRow {
+  rank: number
+  name: string
+  points: number
+  gd: number
+  place: number
+  result: string
+  you?: boolean
+}
+export interface DailyView {
+  day: string
+  endsAt: number
+  players: number
+  status: 'none' | 'playing' | 'done'
+  round?: number
+  points?: number
+  top: DailyRow[]
+  mine?: DailyRow
+  rival?: DailyRow // the manager whose challenge link was opened
 }
 // A level just reached (toasts): Bronze the first time, then Silver, Gold, Platinum, Diamond.
 export interface Achievement {
@@ -333,7 +356,9 @@ export interface MatchLine {
 export interface GameRecord {
   id: string
   at: number
-  mode: 'solo' | 'ranked' | 'normal' | 'friends' | 'series'
+  mode: 'solo' | 'daily' | 'ranked' | 'normal' | 'friends' | 'series'
+  day?: string
+  gd?: number
   season?: number
   result: string
   place?: number
@@ -511,6 +536,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return data as T
 }
 
+const dq = (daily?: boolean) => (daily ? '?daily=1' : '')
+
 export const api = {
   meta: () => call<Meta>('GET', '/api/meta'),
 
@@ -530,6 +557,9 @@ export const api = {
   login: (username: string, password: string) => call<{ name: string; restored?: boolean }>('POST', '/api/auth/login', { username, password }),
   deleteAccount: (password: string) => call<{ ok: boolean; purgeAt: number }>('POST', '/api/profile/delete', { password }),
   logout: () => call<{ ok: boolean }>('POST', '/api/auth/logout', {}),
+  guest: () => call<{ name: string }>('POST', '/api/auth/guest', {}),
+  claim: (username: string, email: string, password: string) => call<{ name: string }>('POST', '/api/auth/claim', { username, email, password }),
+  daily: (vs?: string | null) => call<DailyView>('GET', vs ? `/api/daily?vs=${encodeURIComponent(vs)}` : '/api/daily'),
   me: () => call<Me>('GET', '/api/me'),
 
   friends: () => call<FriendList>('GET', '/api/friends'),
@@ -560,10 +590,11 @@ export const api = {
   lobbyOrder: (id: string, tactic: string) => call<{ myOrder: string }>('POST', '/api/lobby/order', { id, tactic }),
   lobbyLeave: (id: string) => call<{ ok: boolean }>('POST', '/api/lobby/leave', { id }),
 
-  run: () => call<RunView>('GET', '/api/run'),
-  newRun: () => call<RunView>('POST', '/api/run'),
-  action: (a: Action) => call<RunView>('POST', '/api/run/action', a),
-  startMatch: () => call<HalfData>('POST', '/api/match/start'),
-  match: () => call<HalfData>('GET', '/api/match'),
-  secondHalf: (tactic: string) => call<HalfData>('POST', '/api/match/second-half', { tactic }),
+  // daily: the same calls on today's daily challenge instead of the season
+  run: (daily?: boolean) => call<RunView>('GET', `/api/run${dq(daily)}`),
+  newRun: (daily?: boolean) => call<RunView>('POST', `/api/run${dq(daily)}`),
+  action: (a: Action, daily?: boolean) => call<RunView>('POST', `/api/run/action${dq(daily)}`, a),
+  startMatch: (daily?: boolean) => call<HalfData>('POST', `/api/match/start${dq(daily)}`),
+  match: (daily?: boolean) => call<HalfData>('GET', `/api/match${dq(daily)}`),
+  secondHalf: (tactic: string, daily?: boolean) => call<HalfData>('POST', `/api/match/second-half${dq(daily)}`, { tactic }),
 }

@@ -74,21 +74,9 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "Too many attempts. Try again in a minute.")
 		return
 	}
-	email, emailKey, okEmail := normEmail(c.Email)
-	if !okEmail {
-		writeErr(w, http.StatusUnprocessableEntity, "Enter a valid email address.")
-		return
-	}
-	if !nameRE.MatchString(c.Username) {
-		writeErr(w, http.StatusUnprocessableEntity, "Username: 3-20 letters, digits or underscores.")
-		return
-	}
-	if n := utf8.RuneCountInString(c.Password); n < minPassword || len(c.Password) > maxPassword {
-		writeErr(w, http.StatusUnprocessableEntity, "Password: at least 8 characters.")
-		return
-	}
-	if strings.EqualFold(c.Password, c.Username) {
-		writeErr(w, http.StatusUnprocessableEntity, "Password must differ from the username.")
+	email, emailKey, msg := newAccount(c.Username, c.Email, c.Password)
+	if msg != "" {
+		writeErr(w, http.StatusUnprocessableEntity, msg)
 		return
 	}
 	hash, err := auth.Hash(c.Password)
@@ -200,7 +188,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request, uid string) {
 		writeErr(w, http.StatusUnauthorized, "Please sign in.")
 		return
 	}
-	out := map[string]any{"name": u.Name, "season": nil, "hasSquad": false, "hasEmail": u.EmailKey != "", "verified": u.Verified, "newAchievements": unseenAchievements(u), "askFeedback": askFeedback(u, time.Now()), "newPlayer": u.Stats["matches"] == 0}
+	out := map[string]any{"name": u.Name, "season": nil, "hasSquad": false, "hasEmail": u.EmailKey != "", "verified": u.Verified, "newAchievements": unseenAchievements(u), "askFeedback": askFeedback(u, time.Now()), "newPlayer": u.Stats["matches"] == 0, "guest": u.Guest}
 	if run, err := s.loadRun(r.Context(), uid); err == nil {
 		_, out["hasSquad"] = run.Squad(u.Name)
 		sum := seasonSummary{Phase: run.Phase, Round: run.Round, MaxRounds: game.MaxRounds, Wins: run.Wins, Draws: run.Draws, Losses: run.Losses, Patience: run.Patience, Result: run.Result}

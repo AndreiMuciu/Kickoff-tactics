@@ -86,6 +86,7 @@ func NewMongo(ctx context.Context, uri, db string) (*Mongo, error) {
 		{m.games, mongo.IndexModel{Keys: bson.D{{Key: "userid", Value: 1}, {Key: "at", Value: -1}}}},
 		{m.feedback, mongo.IndexModel{Keys: bson.D{{Key: "at", Value: -1}}}},
 		{m.users, mongo.IndexModel{Keys: bson.D{{Key: "deletedat", Value: 1}}, Options: options.Index().SetSparse(true)}},
+		{m.games, mongo.IndexModel{Keys: bson.D{{Key: "day", Value: 1}, {Key: "points", Value: -1}, {Key: "gd", Value: -1}, {Key: "at", Value: 1}}, Options: options.Index().SetSparse(true)}},
 	}
 	for _, ix := range indexes {
 		if _, err := ix.c.Indexes().CreateOne(ctx, ix.m); err != nil {
@@ -645,6 +646,7 @@ func (m *Mongo) PurgeUser(ctx context.Context, u *User, anon string) error {
 			return err
 		},
 		func() error { _, err := m.runs.DeleteOne(ctx, id(uid)); return err },
+		func() error { _, err := m.runs.DeleteOne(ctx, id("daily:"+uid)); return err },
 		func() error {
 			_, err := m.runs.DeleteMany(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$regex", Value: "^vs:.*:" + regexp.QuoteMeta(uid) + "$"}}}})
 			return err
@@ -664,7 +666,12 @@ func (m *Mongo) PurgeUser(ctx context.Context, u *User, anon string) error {
 		func() error { _, err := m.sessions.DeleteMany(ctx, bson.D{{Key: "userid", Value: uid}}); return err },
 		func() error { _, err := m.tokens.DeleteMany(ctx, bson.D{{Key: "userid", Value: uid}}); return err },
 		// Last: only once everything else is gone is the account marked purged.
+		// Nobody knew a guest by name, so nothing at all is left of one.
 		func() error {
+			if u.Guest {
+				_, err := m.users.DeleteOne(ctx, bson.D{{Key: "_id", Value: uid}, {Key: "guest", Value: true}})
+				return err
+			}
 			stub := User{ID: uid, Name: anon, NameKey: "deleted:" + uid, CreatedAt: u.CreatedAt, DeletedAt: u.DeletedAt, Purged: true}
 			_, err := m.users.ReplaceOne(ctx, bson.D{{Key: "_id", Value: uid}, {Key: "purged", Value: bson.D{{Key: "$ne", Value: true}}}}, &stub)
 			return err
@@ -676,6 +683,31 @@ func (m *Mongo) PurgeUser(ctx context.Context, u *User, anon string) error {
 		}
 	}
 	return nil
+}
+
+func (m *Mongo) ClaimGuest(ctx context.Context, uid, name, nameKey, passHash, email, emailKey string) error {
+	res, err := m.users.UpdateOne(ctx, bson.D{{Key: "_id", Value: uid}, {Key: "guest", Value: true}}, bson.D{
+		{Key: "$set", Value: bson.D{{Key: "name", Value: name}, {Key: "namekey", Value: nameKey}, {Key: "passhash", Value: passHash},
+			{Key: "email", Value: email}, {Key: "emailkey", Value: emailKey}}},
+		{Key: "$unset", Value: bson.D{{Key: "guest", Value: ""}, {Key: "deletedat", Value: ""}}}})
+	if err != nil {
+		return dupUser(err)
+	}
+	if res.MatchedCount == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (m *Mongo) DailyTop(ctx context.Context, day string, n int) ([]GameRecord, error) {
+	cur, err := m.games.Find(ctx, bson.D{{Key: "day", Value: day}},
+		options.Find().SetSort(bson.D{{Key: "points", Value: -1}, {Key: "gd", Value: -1}, {Key: "at", Value: 1}}).SetLimit(int64(n)))
+	if err != nil {
+		return nil, err
+	}
+	out := []GameRecord{}
+	err = cur.All(ctx, &out)
+	return out, err
 }
 
 func (m *Mongo) RankInfo(ctx context.Context, lp int) (int, int, error) {

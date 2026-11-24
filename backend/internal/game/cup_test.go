@@ -102,3 +102,28 @@ func TestCupDrawIsRandom(t *testing.T) {
 		t.Fatal("two draws gave the same groups")
 	}
 }
+
+// The daily challenge: the same start for everyone on a day, a different one
+// the next day, and the season ends with the league.
+func TestDailyChallenge(t *testing.T) {
+	a, b, c := NewDailyRun("a", "2026-11-24"), NewDailyRun("b", "2026-11-24"), NewDailyRun("c", "2026-11-25")
+	if fmt.Sprint(a.Shop, a.League.Teams, a.Opponent) != fmt.Sprint(b.Shop, b.League.Teams, b.Opponent) {
+		t.Fatal("two managers got different daily challenges on the same day")
+	}
+	if fmt.Sprint(a.Shop, a.League.Teams) == fmt.Sprint(c.Shop, c.League.Teams) {
+		t.Fatal("the next day repeats the challenge")
+	}
+	g := NewRNG(5)
+	for a.Phase == "shop" {
+		a.BotManage(g)
+		if _, err := a.StartMatch(); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := a.FinishMatch("balanced"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if a.Cup != nil || a.Round > MaxRounds || a.View().Daily != "2026-11-24" {
+		t.Fatalf("the daily went on after the league: round %d, cup %v", a.Round, a.Cup)
+	}
+}

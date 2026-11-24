@@ -603,6 +603,30 @@ the first server that needs the ranking in a new month runs one `UpdateMany` tha
 managers still in an older season, so it is safe to run twice or on two servers at once. Home
 shows the season and when it ends; history rows carry their season.
 
+## Play now, daily challenge, sharing [in demo]
+
+- **Play now (guests).** `POST /api/auth/guest` makes an account on the spot (`Guest_xxxxxx`, no
+  password or email) and signs it in. It is created hidden (`DeletedAt` set), so it is in no
+  ranking or search and the janitor erases it 30 days later, leaving nothing behind (no
+  "Former manager" stub). A guest plays the solo season and the daily challenge; every other
+  change (friends, chat, lobbies, series, profile) answers 403 (`guestAllowed` in `api/guest.go`).
+  `POST /api/auth/claim` gives the same account a name, email and password, so the season,
+  the daily result, statistics and achievements stay. Names starting with `guest_` are reserved.
+- **Daily challenge.** `?daily=1` on the run and match routes plays `daily:<user>`, one stored
+  run per manager, replaced the next day. `game.NewDailyRun` seeds from the UTC day, so everyone
+  gets the same first market, rivals, league and story; match seeds stay random and secret. It
+  ends after the league (no Europe, no play-off). One attempt per day; yesterday's unfinished run
+  is gone at midnight UTC. Results are games with mode `daily`, `day` and `gd`;
+  `GET /api/daily[?vs=name]` gives the day's table (points, then goal difference, then who
+  finished first), the manager's own row and the challenger's.
+- **Links.** `/?c=<name>` is a challenge: the sign-in page offers "Accept the challenge" (as a
+  guest), and the daily panel shows the challenger's score. `/?add=<name>` stays the friend
+  invite; a guest's invite is sent once the account is claimed.
+- **Sharing.** `src/share.ts` draws a 1080 × 1080 result card on a canvas (result, points,
+  W-D-L, key players). Phones get the share sheet with the picture; desktops download it and
+  copy the text with the link. Link previews: `og:`/`twitter:` tags in `index.html`, image
+  `public/og.jpg` (1200 × 630).
+
 ## Not built yet
 
 - Rating by opponent strength (points depend on place and own division only),

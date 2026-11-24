@@ -179,3 +179,72 @@ func TestMongoDeleteAndPurge(t *testing.T) {
 		t.Fatalf("sign-up with the freed name: %v", err)
 	}
 }
+
+// Guests: hidden until claimed, claimable once, erased without a stub. Daily
+// results sort by points, then goal difference (0 included), then time.
+func TestMongoGuestsAndDaily(t *testing.T) {
+	m := testMongo(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	for _, u := range []User{
+		{ID: "g1", Name: "Guest_1", NameKey: "guest_1", Guest: true, DeletedAt: now},
+		{ID: "g2", Name: "Guest_2", NameKey: "guest_2", Guest: true, DeletedAt: now},
+		{ID: "r", Name: "Real", NameKey: "real", EmailKey: "r@x.test"},
+	} {
+		if err := m.CreateUser(ctx, &u); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if top, _ := m.TopRated(ctx, 10); len(top) != 1 {
+		t.Fatalf("guests in the ranking: %d", len(top))
+	}
+	if err := m.ClaimGuest(ctx, "g1", "Real", "real", "h", "n@x.test", "n@x.test"); err != ErrConflict {
+		t.Fatalf("taken name: %v", err)
+	}
+	if err := m.ClaimGuest(ctx, "g1", "Boss", "boss", "h", "r@x.test", "r@x.test"); err != ErrEmailTaken {
+		t.Fatalf("taken email: %v", err)
+	}
+	if err := m.ClaimGuest(ctx, "g1", "Boss", "boss", "h", "n@x.test", "n@x.test"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.ClaimGuest(ctx, "g1", "Boss2", "boss2", "h", "m@x.test", "m@x.test"); err != ErrNotFound {
+		t.Fatalf("claimed twice: %v", err)
+	}
+	u, _ := m.UserByName(ctx, "boss")
+	if u == nil || u.Guest || u.Hidden() {
+		t.Fatalf("claimed user: %+v", u)
+	}
+	due, _ := m.DueForPurge(ctx, now.Add(time.Minute), 10)
+	if len(due) != 1 || due[0].ID != "g2" {
+		t.Fatalf("due: %+v", due)
+	}
+	if err := m.PurgeUser(ctx, &due[0], "x"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.UserByID(ctx, "g2"); err != ErrNotFound {
+		t.Fatalf("purged guest left a trace: %v", err)
+	}
+	for i, g := range []GameRecord{
+		{ID: "1", UserID: "a", Day: "d", Points: 10, GD: -2},
+		{ID: "2", UserID: "b", Day: "d", Points: 10, GD: 0},
+		{ID: "3", UserID: "c", Day: "d", Points: 12, GD: -5},
+		{ID: "4", UserID: "d", Day: "e", Points: 30},
+		{ID: "5", UserID: "e", Day: "d", Points: 10, GD: 0},
+	} {
+		g.At = now.Add(time.Duration(i) * time.Second)
+		if err := m.AddGame(ctx, &g); err != nil {
+			t.Fatal(err)
+		}
+	}
+	top, err := m.DailyTop(ctx, "d", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := ""
+	for _, g := range top {
+		got += g.ID
+	}
+	if got != "3251" {
+		t.Fatalf("daily order %q, want 3251", got)
+	}
+}

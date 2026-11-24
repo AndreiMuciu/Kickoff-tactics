@@ -68,6 +68,11 @@ type User struct {
 	// FeedbackAsked is when the game last asked the manager for feedback (or
 	// he sent some); it asks again a week later.
 	FeedbackAsked time.Time `bson:"feedbackasked,omitempty"`
+	// Guest: an account made by "Play now", with no name, password or email
+	// of the manager's own. It is created hidden (DeletedAt set), so it is in
+	// no ranking or search and is erased like a deleted account unless the
+	// manager claims it (ClaimGuest) by choosing a name and a password.
+	Guest bool `bson:"guest,omitempty"`
 }
 
 // Hidden reports whether the account is deleted or waiting to be.
@@ -111,6 +116,8 @@ type GameRecord struct {
 	Points   int         `json:"points,omitempty" bson:"points,omitempty"` // ranked: points won or lost; solo: league points
 	Opponent string      `json:"opponent,omitempty" bson:"opponent,omitempty"`
 	Cup      string      `json:"cup,omitempty" bson:"cup,omitempty"` // solo: "<cup>:<outcome>" after a European run
+	Day      string      `json:"day,omitempty" bson:"day,omitempty"` // daily: the challenge's day
+	GD       int         `json:"gd,omitempty" bson:"gd"`             // daily: league goal difference, the tie-break (kept at 0: a missing field sorts below negatives)
 	Wins     int         `json:"wins" bson:"wins"`
 	Draws    int         `json:"draws,omitempty" bson:"draws,omitempty"`
 	Losses   int         `json:"losses" bson:"losses"`
@@ -300,6 +307,12 @@ type Store interface {
 	// managers' history becomes `anon`, its feedback stays without a name, and
 	// a stub with `anon` is all that is left of the user. Safe to run twice.
 	PurgeUser(ctx context.Context, u *User, anon string) error
+	// ClaimGuest turns a guest account into a normal one: ErrNotFound when it
+	// is not a guest, ErrConflict when the name is taken, ErrEmailTaken.
+	ClaimGuest(ctx context.Context, id, name, nameKey, passHash, email, emailKey string) error
+	// DailyTop is a day's daily-challenge results, best first: league points,
+	// then goal difference, then who finished first.
+	DailyTop(ctx context.Context, day string, n int) ([]GameRecord, error)
 
 	PutToken(ctx context.Context, t *Token) error
 	// TakeToken returns the token and deletes it in one step, so it works once.
@@ -577,6 +590,7 @@ func (m *Memory) PurgeUser(_ context.Context, u *User, anon string) error {
 	}
 	m.games = games
 	delete(m.runs, u.ID)
+	delete(m.runs, "daily:"+u.ID)
 	for k := range m.runs {
 		if strings.HasPrefix(k, "vs:") && strings.HasSuffix(k, ":"+u.ID) {
 			delete(m.runs, k)
@@ -607,10 +621,49 @@ func (m *Memory) PurgeUser(_ context.Context, u *User, anon string) error {
 	if cur.EmailKey != "" {
 		delete(m.byEmail, cur.EmailKey)
 	}
+	if cur.Guest { // nobody knew a guest by name: nothing is left of it
+		delete(m.users, u.ID)
+		return nil
+	}
 	stub := User{ID: u.ID, Name: anon, NameKey: "deleted:" + u.ID, CreatedAt: cur.CreatedAt, DeletedAt: cur.DeletedAt, Purged: true}
 	m.users[u.ID] = stub
 	m.byName[stub.NameKey] = u.ID
 	return nil
+}
+
+func (m *Memory) ClaimGuest(_ context.Context, id, name, nameKey, passHash, email, emailKey string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.users[id]
+	if !ok || !u.Guest {
+		return ErrNotFound
+	}
+	if _, taken := m.byName[nameKey]; taken {
+		return ErrConflict
+	}
+	if _, taken := m.byEmail[emailKey]; taken {
+		return ErrEmailTaken
+	}
+	delete(m.byName, u.NameKey)
+	u.Name, u.NameKey, u.PassHash, u.Email, u.EmailKey = name, nameKey, passHash, email, emailKey
+	u.Guest, u.DeletedAt = false, time.Time{}
+	m.users[id], m.byName[nameKey], m.byEmail[emailKey] = u, id, id
+	return nil
+}
+
+func (m *Memory) DailyTop(_ context.Context, day string, n int) ([]GameRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []GameRecord
+	for _, g := range m.games { // oldest first, so a stable sort keeps who finished first ahead
+		if g.Day == day {
+			out = append(out, g)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Points > out[j].Points || (out[i].Points == out[j].Points && out[i].GD > out[j].GD)
+	})
+	return out[:min(n, len(out))], nil
 }
 
 func (m *Memory) SetFeedbackAsked(_ context.Context, id string, at time.Time) error {

@@ -5,6 +5,8 @@ import { watch } from './live'
 import { QUOTES } from './quotes'
 import Profile from './Profile'
 import Tutorial from './Tutorial'
+import Daily from './Daily'
+import Claim from './Claim'
 import { ord } from './League'
 import { CUPS, cupEnding } from './story'
 
@@ -12,6 +14,8 @@ const RESULT: Record<string, string> = { champion: '🏆 Champions', europe: '�
 
 interface Props {
   me: Me
+  challenger: string | null // opened from a daily-challenge link
+  onDaily: () => void
   ranked: RankedView | null
   onRanked: (mode: 'ranked' | 'normal' | null) => void // null leaves the queue
   onParty: (f: () => Promise<unknown>) => void // runs a friends-lobby call, then refreshes
@@ -23,8 +27,9 @@ interface Props {
   notify: (msg: string) => void
 }
 
-export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, onWatchLobby, onLogout, onProfileChanged, notify }: Props) {
+export default function Home({ me, challenger, onDaily, ranked, onRanked, onParty, onPlay, onLive, onWatchLobby, onLogout, onProfileChanged, notify }: Props) {
   const [profile, setProfile] = useState(false)
+  const [claim, setClaim] = useState(false) // a guest creating an account
   // A friend whose profile is open (read-only).
   const [friendProfile, setFriendProfile] = useState<string | null>(null)
   const [list, setList] = useState<FriendList>({ friends: [], incoming: [], outgoing: [] })
@@ -79,7 +84,7 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
   const refresh = useCallback(() => api.friends().then(setList).catch(() => {}), [])
 
   // Friends and the open conversation arrive over the live connection.
-  useEffect(() => watch<FriendList>('/api/friends', { every: 6000, onData: ({ data }) => setList(data) }), [])
+  useEffect(() => (me.guest ? undefined : watch<FriendList>('/api/friends', { every: 6000, onData: ({ data }) => setList(data) })), [me.guest])
 
   useEffect(() => {
     if (!open) return
@@ -144,6 +149,20 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
     <div className="app">
       <header className="top">
         <h1>Kickoff Tactics</h1>
+        {me.guest ? (
+          <>
+            <span className="chip" title="You are playing without an account">
+              Guest
+            </span>
+            <button className="primary" onClick={() => setClaim(true)}>
+              Create account
+            </button>
+            <button className="restart" onClick={() => setTutorial(true)} title="The rules in eight short steps">
+              📖 How to play
+            </button>
+          </>
+        ) : (
+          <>
         <button className="chip chip-btn" onClick={() => setProfile(true)} title="Profile, statistics, email and password">
           Manager <b>{me.name}</b>
           {me.newAchievements > 0 && (
@@ -159,8 +178,19 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
         <button className="restart" onClick={onLogout}>
           Log out
         </button>
+          </>
+        )}
       </header>
-      {!me.verified && (
+      {me.guest && (
+        <div className="notice">
+          You are playing as a guest. Create an account to keep your season and daily results on any device, add friends and play lobbies of eight.{' '}
+          <button className="link" onClick={() => setClaim(true)}>
+            Create account →
+          </button>
+        </div>
+      )}
+      {claim && <Claim onClose={() => setClaim(false)} onDone={() => { setClaim(false); notify('Account created. Everything you played is kept.'); onProfileChanged() }} onLogin={onLogout} />}
+      {!me.verified && !me.guest && (
         <div className="notice">
           {me.hasEmail ? 'Confirm your email address: open the link we mailed you.' : 'Add an email address, so a forgotten password can be reset.'}{' '}
           <button className="link" onClick={() => setProfile(true)}>
@@ -181,6 +211,7 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
       {tutorial && <Tutorial onClose={closeTutorial} />}
       {friendProfile && <Profile name={friendProfile} onClose={() => setFriendProfile(null)} onChanged={() => {}} />}
       <main className="home">
+        <div className={`home-col ${challenger ? 'challenged' : ''}`}>
         <section className="panel hero">
           <h2>{inSeason ? 'Your season is waiting' : 'Start a season'}</h2>
           {s ? (
@@ -218,6 +249,20 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
           </ul>
         </section>
 
+        <Daily me={me} challenger={challenger} onPlay={onDaily} notify={notify} />
+        </div>
+
+        {me.guest ? (
+          <section className="panel guest-box">
+            <h3>Play with others</h3>
+            <p>Lobbies of eight managers, ranked points and divisions, live series against friends, chat and a public profile need an account.</p>
+            <p className="muted">Creating one keeps everything you played as a guest: the season, today's challenge and your achievements.</p>
+            <button className="primary big" onClick={() => setClaim(true)}>
+              Create account
+            </button>
+          </section>
+        ) : (
+          <>
         <section className="panel rankedbox">
           <h3>Lobby of eight</h3>
           {ranked ? (
@@ -479,6 +524,8 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
             </div>
           )}
         </section>
+          </>
+        )}
       </main>
       {board && (
         <div className="overlay" onClick={() => setBoard(null)}>

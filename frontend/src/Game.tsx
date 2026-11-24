@@ -1,6 +1,8 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from './api'
-import type { Action, CupView, HalfData, HistoryEntry, Meta, RunView } from './api'
+import type { Action, CupView, HalfData, HistoryEntry, Me, Meta, RunView } from './api'
+import { challengeLink, friendLink, shareCard } from './share'
+import type { Card } from './share'
 import ClubBoard, { Shootout, StatsTable } from './ClubBoard'
 import { MatchMarket } from './Market'
 import MatchView from './MatchView'
@@ -18,6 +20,8 @@ interface Props {
   meta: Meta
   photos: Photos
   fresh: boolean
+  daily: boolean // today's daily challenge instead of the season
+  me: Me
   onHome: () => void
 }
 
@@ -26,14 +30,14 @@ interface Props {
 // one season while the server kept the other: the market on screen was not
 // the one being bought from. Both mounts share this single request instead.
 let loading: Promise<RunView> | null = null
-function loadRun(fresh: boolean): Promise<RunView> {
+function loadRun(fresh: boolean, daily: boolean): Promise<RunView> {
   loading ??= (async () => {
-    if (fresh) return api.newRun()
+    if (fresh) return api.newRun(daily)
     try {
-      return await api.run()
+      return await api.run(daily)
     } catch (e) {
       if (!(e instanceof ApiError && e.status === 404)) throw e
-      return api.newRun()
+      return api.newRun(daily)
     }
   })().finally(() => {
     loading = null
@@ -60,7 +64,37 @@ function europeLine(r: HistoryEntry, m: number, cup?: CupView): string {
 
 const cupStageKey = (m: number) => (m <= 4 ? 'quarter' : m === 5 ? 'semi' : 'final')
 
-export default function Game({ meta, photos, fresh, onHome }: Props) {
+const DAILY_RULES = "Today's challenge: every manager gets this same club, the same market and the same rivals. No Europe and no play-off: after nine matchdays, the most points wins the day."
+
+const PLACE: Record<string, string> = { champion: 'Champions', sacked: 'Sacked' }
+
+// card is what the share picture shows of a finished season.
+function card(run: RunView, meta: Meta): Card {
+  const lg = run.league
+  const pos = lg ? lg.position : 0
+  const cupLine = run.cup?.out ? cupEnding(run.cup.id, run.cup.out).title : undefined
+  const best = [...run.units]
+    .map((u) => ({ u, p: meta.players.find((p) => p.id === u.def) }))
+    .filter((x) => x.p)
+    .sort((a, b) => b.u.stars - a.u.stars || b.p!.cost - a.p!.cost)
+    .slice(0, 3)
+    .map((x) => `${x.p!.name}${x.u.stars > 1 ? ' ' + '★'.repeat(x.u.stars) : ''}`)
+  const day = run.daily ? new Date(`${run.daily}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''
+  return {
+    kicker: run.daily ? `Daily challenge · ${day}` : 'Solo season',
+    title: run.result === 'sacked' && !run.cup ? 'Sacked' : PLACE[run.result] ?? (pos ? `${ord(pos)} place` : 'Season over'),
+    line: cupLine,
+    stats: [
+      ['points', String(lg?.points ?? 0)],
+      ['W-D-L', `${run.wins}-${run.draws ?? 0}-${run.losses}`],
+      ...(pos ? ([['position', ord(pos)]] as [string, string][]) : []),
+    ],
+    players: best,
+    footer: run.daily ? 'Beat my score at' : 'Build your club at',
+  }
+}
+
+export default function Game({ meta, photos, fresh, daily, me, onHome }: Props) {
   const [run, setRun] = useState<RunView | null>(null)
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -78,11 +112,11 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
     let alive = true
     ;(async () => {
       try {
-        const r = await loadRun(fresh)
+        const r = await loadRun(fresh, daily)
         if (!alive) return
         setRun(r)
         if (r.phase === 'halftime') {
-          const h1 = await api.match()
+          const h1 = await api.match(daily)
           if (alive) setMatch({ stage: 'halftime', h1 })
         }
       } catch (e) {
@@ -110,10 +144,10 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
   const act = (a: Action) =>
     guard(async () => {
       try {
-        setRun(await api.action(a))
+        setRun(await api.action(a, daily))
       } catch (e) {
         // A refused action may mean this screen is out of date: show what the server has.
-        api.run().then(setRun).catch(() => {})
+        api.run(daily).then(setRun).catch(() => {})
         throw e
       }
     })
@@ -122,13 +156,13 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
       setMatch(null)
       setIntroSeen(false)
       setCupIntroSeen(false)
-      setRun(await api.newRun())
+      setRun(await api.newRun(daily))
     })
-  const kickoff = () => guard(async () => setMatch({ stage: 'h1', h1: await api.startMatch() }))
+  const kickoff = () => guard(async () => setMatch({ stage: 'h1', h1: await api.startMatch(daily) }))
   const second = (tactic: string) =>
     guard(async () => {
       if (!match) return
-      const h2 = await api.secondHalf(tactic)
+      const h2 = await api.secondHalf(tactic, daily)
       setMatch({ stage: 'h2', h1: match.h1, h2 })
     })
 
@@ -142,6 +176,19 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
     )
 
   const shopPhase = run.phase === 'shop' && !match
+  const share = () =>
+    guard(async () => {
+      const pts = run.league?.points ?? 0
+      const text = run.daily
+        ? `I made ${pts} pts in today's Kickoff Tactics challenge. Can you beat me?`
+        : `My Kickoff Tactics season: ${card(run, meta).title}, ${pts} pts.`
+      const link = run.daily ? challengeLink(me.name) : me.guest ? location.origin : friendLink(me.name)
+      const r = await shareCard(card(run, meta), text, link)
+      if (r === 'saved') {
+        setToast('Picture saved and text with link copied: paste it anywhere.')
+        window.setTimeout(() => setToast(null), 3200)
+      }
+    })
   const last = run.history[run.history.length - 1]
 
   return (
@@ -161,6 +208,11 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
             <b>
               {Math.min(run.round, run.maxRounds)}/{run.maxRounds}
             </b>
+          </div>
+        )}
+        {run.daily && (
+          <div className="chip daily-chip" title="Today's daily challenge: the same start for everyone">
+            📅 Daily
           </div>
         )}
         {run.league && (
@@ -380,7 +432,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
                   setMatch(null)
                   // The result carries the club as the match ended; read it again
                   // in case anything changes server-side meanwhile.
-                  api.run().then(setRun).catch(() => {})
+                  api.run(daily).then(setRun).catch(() => {})
                 }}
               >
                 Continue
@@ -402,6 +454,12 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
                 <p>{cupEnding(run.cup.id, run.cup.out).text}</p>
                 <p className="muted">League: {EPILOGUE[run.cup.playoff ? 'relegated' : run.result]?.title}</p>
               </>
+            ) : run.daily ? (
+              <>
+                <small className="story-kicker">📅 Daily challenge</small>
+                <h2>{run.result === 'sacked' ? '📦 Sacked' : `${card(run, meta).title}!`}</h2>
+                <p>Today's challenge is done. The table of the day is on the home page; a new challenge starts at midnight UTC. Send a friend the link: they get the same start as you.</p>
+              </>
             ) : (
               <>
                 <h2>{EPILOGUE[run.result]?.title}</h2>
@@ -421,9 +479,14 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
             {run.league && <LeagueTable league={run.league} />}
             <div className="row center-row">
               <button onClick={onHome}>← Home</button>
-              <button className="primary big" disabled={busy} onClick={newRun}>
-                New season
+              <button disabled={busy} onClick={share} title="A picture of your result and a link to the game">
+                📤 Share
               </button>
+              {!run.daily && (
+                <button className="primary big" disabled={busy} onClick={newRun}>
+                  New season
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -433,7 +496,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
           <div className="dialog story">
             <small className="story-kicker">Chapter 1</small>
             <h2>{INTRO.title}</h2>
-            {INTRO.text.map((t, i) => (
+            {(run.daily ? [...INTRO.text.slice(0, -1), DAILY_RULES] : INTRO.text).map((t, i) => (
               <p key={i}>{t}</p>
             ))}
             <button className="primary big" onClick={() => setIntroSeen(true)}>

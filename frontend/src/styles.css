@@ -628,3 +628,21 @@ button.danger:disabled { opacity: .5; cursor: not-allowed; }
 .kitbag .recipes summary { cursor: pointer; color: var(--mine); font-size: 12px; margin-top: 4px; }
 .kitbag .recipes p { margin: 6px 0; font-size: 12px; display: grid; gap: 1px; }
 .kitbag .recipes small { color: var(--muted); }
+
+/* Play now, guests and the daily challenge */
+.play-now { display: grid; gap: 8px; justify-items: center; width: min(380px, 100%); margin: 0 auto; }
+.play-now .big { width: 100%; font-size: 18px; padding: 14px; }
+.play-now .or { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 2px; }
+.home-col { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.daily { gap: 10px; }
+.daily h3 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.daily h3 small { font-weight: 400; font-size: 12px; }
+.daily-actions { flex-wrap: wrap; align-items: center; }
+.daily-done { flex: 1; }
+.daily-table { display: grid; gap: 2px; border-top: 1px solid var(--line); padding-top: 8px; }
+.rival-line { background: rgba(251, 146, 60, .12); border: 1px solid rgba(251, 146, 60, .4); border-radius: 10px; padding: 8px 12px; }
+.daily-chip { border-color: var(--gold); }
+.guest-box { gap: 12px; }
+.dialog.claim { width: min(440px, 100%); }
+.dialog.claim .auth { width: 100%; padding: 0; border: 0; background: none; }
+.home-col.challenged .daily { order: -1; }

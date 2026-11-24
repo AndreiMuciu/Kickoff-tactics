@@ -120,6 +120,9 @@ type Run struct {
 	Pledge      string   `bson:",omitempty"`
 	// BotRound is the last lobby round in which a bot club did its shopping.
 	BotRound int `bson:",omitempty"`
+	// Daily is the day (UTC, "2006-01-02") of a daily challenge: every manager
+	// starts that day from the same seed, and the season ends with the league.
+	Daily string `bson:",omitempty"`
 }
 
 type Action struct {
@@ -154,6 +157,19 @@ func NewRun(sessionID string) (*Run, error) {
 	if err != nil {
 		return nil, err
 	}
+	return newRun(sessionID, seed), nil
+}
+
+// NewDailyRun starts the daily challenge of a day: the same first market,
+// rivals, league and story for every manager. Match seeds stay random and secret.
+func NewDailyRun(sessionID, day string) *Run {
+	h := sha256.Sum256([]byte("kickoff-daily:" + day))
+	r := newRun(sessionID, binary.LittleEndian.Uint64(h[:8]))
+	r.Daily = day
+	return r
+}
+
+func newRun(sessionID string, seed uint64) *Run {
 	r := &Run{SessionID: sessionID, Phase: "shop", Round: 1, Patience: StartPatience, Budget: 6, Level: 1, RNGState: int64(seed), NextUID: 1}
 	// Every club starts with an academy keeper already in goal.
 	r.Units = []Unit{{UID: "u1", Def: AcademyKeeper, Stars: 1, Line: GKLine, Lane: 0}}
@@ -162,7 +178,7 @@ func NewRun(sessionID string) (*Run, error) {
 		r.Opponent = genOpponent(g, 1)
 		r.League = NewLeague(g)
 	})
-	return r, nil
+	return r
 }
 
 func (r *Run) withRNG(f func(g *RNG)) {
@@ -741,7 +757,7 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 		}
 	case r.Round >= MaxRounds:
 		r.Result = r.finalResult()
-		if r.League != nil && cupFor(r.League.Position()) != "" {
+		if r.League != nil && r.Daily == "" && cupFor(r.League.Position()) != "" {
 			id := cupFor(r.League.Position())
 			r.withRNG(func(g *RNG) { r.Cup = newCup(g, id) })
 			if id == PlayoffID {
@@ -829,6 +845,7 @@ type RunView struct {
 	Event        *StoryEvent    `json:"event,omitempty"`  // solo: the club event waiting for an answer
 	Pledge       string         `json:"pledge,omitempty"` // solo: a promise the next match will judge
 	Cup          *CupView       `json:"cup,omitempty"`    // solo: the run in Europe after the league
+	Daily        string         `json:"daily,omitempty"`  // the day of a daily challenge
 }
 
 func (r *Run) View() RunView {
@@ -843,6 +860,7 @@ func (r *Run) View() RunView {
 		Augments: r.Augments, AugmentOffer: r.AugmentOffer, Items: r.Items,
 		LossCost: [2]int{r.lessened(SoloDamage(r.Round, 1)), r.lessened(SoloDamage(r.Round, 3))},
 		Cup:      r.cupView(),
+		Daily:    r.Daily,
 	}
 	if r.Cup != nil {
 		v.LossCost = [2]int{}

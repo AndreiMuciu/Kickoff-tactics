@@ -13,6 +13,7 @@ const day = (ms: number) =>
 
 const MODE: Record<GameRecord['mode'], string> = {
   solo: 'Solo season',
+  daily: 'Daily challenge',
   ranked: 'Ranked lobby',
   normal: 'Normal lobby',
   friends: 'Friends lobby',
@@ -29,6 +30,7 @@ const SOLO: Record<string, string> = {
 function outcome(g: GameRecord): { text: string; good: boolean } {
   switch (g.mode) {
     case 'solo':
+    case 'daily':
       return {
         text: `${SOLO[g.result] ?? g.result}${g.place && g.result !== 'sacked' ? ` · ${g.place} of ${g.of}, ${g.points ?? 0} pts` : ''}${g.cup ? ` · ${cupEnding(...(g.cup.split(':') as [string, string])).title}` : ''}`,
         good: g.result !== 'sacked' && g.result !== 'relegated',
