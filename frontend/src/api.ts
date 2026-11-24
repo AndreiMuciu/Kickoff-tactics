@@ -110,14 +110,35 @@ export interface LeagueView {
   europe: number // last European place
   relegate: number // first relegation place
 }
+export interface CupTie {
+  stage: 'quarter' | 'semi' | 'final'
+  home: string
+  away: string
+  hg: number
+  ag: number
+  pens?: boolean
+  winner?: string // empty until played
+}
+export interface CupGroup {
+  letter: string
+  table: LeagueTeam[]
+  last: LeagueResult[]
+}
+// The run after the league: a European cup, or the play-off after relegation.
 export interface CupView {
   id: string
   name: string
   stars: number
-  match: number // the current (or last) European match, 1..5
-  stage: 'group' | 'semi' | 'final'
-  out?: 'group' | 'semi' | 'final' | 'winner' // set once the European run is over
-  group: LeagueView
+  playoff?: boolean
+  match: number // the current (or last) match after the league, 1..matches
+  matches: number
+  stage: 'group' | 'quarter' | 'semi' | 'final'
+  out?: string // once over: group | quarter | semi | final | winner; play-off: promoted | stayed | sacked
+  group: LeagueView // yours
+  groups: CupGroup[]
+  mine: number // index of your group
+  ties: CupTie[]
+  winner?: string // who lifted the cup, once known
 }
 export interface StoryChoice {
   label: string

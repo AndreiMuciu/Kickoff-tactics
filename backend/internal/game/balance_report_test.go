@@ -314,7 +314,7 @@ func TestBalanceCostAndStars(t *testing.T) {
 // buys the dearest player he can afford, completes merges, levels up when rich.
 func TestBalanceSoloSeason(t *testing.T) {
 	skipUnlessReport(t)
-	results, reached, won := map[string]int{}, [MaxRounds + CupMatches + 1]int{}, [MaxRounds + CupMatches + 1]int{}
+	results, reached, won := map[string]int{}, [MaxRounds + CupGroupDays + 4]int{}, [MaxRounds + CupGroupDays + 4]int{}
 	cups := map[string]map[string]int{} // cup -> outcome -> seasons
 	positions, finished, champPts, myPts := [LeagueTeams + 1]int{}, 0, 0, 0
 	const n = 1500
@@ -356,17 +356,24 @@ func TestBalanceSoloSeason(t *testing.T) {
 	t.Logf("results of %d seasons: %v", n, results)
 	t.Logf("seasons that reached each fixture: %v", reached[1:])
 	rates := make([]string, 0, MaxRounds)
-	for i := 1; i <= MaxRounds+CupMatches; i++ {
+	for i := 1; i < len(reached); i++ {
 		rates = append(rates, fmt.Sprintf("%d%%", 100*won[i]/max(reached[i], 1)))
 	}
 	t.Logf("win rate per fixture: %v", rates)
 	t.Logf("final positions of finished seasons (1..10): %v", positions[1:])
 	t.Logf("average champion points: %.1f, your average points: %.1f", float64(champPts)/float64(max(finished, 1)), float64(myPts)/float64(max(finished, 1)))
 	for _, c := range Cups {
-		o := cups[c.ID]
-		n := o["group"] + o["semi"] + o["final"] + o["winner"]
-		t.Logf("%s: %d entries, out in the group %d%%, lost the semi %d%%, lost the final %d%%, won %d%%", c.Name, n,
-			100*o["group"]/max(n, 1), 100*o["semi"]/max(n, 1), 100*o["final"]/max(n, 1), 100*o["winner"]/max(n, 1))
+		o, n := cups[c.ID], 0
+		for _, v := range o {
+			n += v
+		}
+		line := ""
+		for _, out := range []string{"group", "quarter", "semi", "final", "winner", "promoted", "stayed", "sacked"} {
+			if o[out] > 0 {
+				line += fmt.Sprintf(" %s %d%%", out, 100*o[out]/n)
+			}
+		}
+		t.Logf("%s: %d entries:%s", c.Name, n, line)
 	}
 }
 

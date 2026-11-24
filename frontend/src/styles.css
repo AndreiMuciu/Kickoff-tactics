@@ -602,3 +602,13 @@ button.danger:disabled { opacity: .5; cursor: not-allowed; }
 .dialog.story.cup-crown { border-color: rgba(250, 204, 21, .6); background: linear-gradient(160deg, rgba(30, 41, 90, .98), rgba(12, 18, 40, .98)); }
 .dialog.story.cup-shield { border-color: rgba(251, 146, 60, .55); background: linear-gradient(160deg, rgba(56, 30, 20, .98), rgba(20, 14, 12, .98)); }
 .dialog.story.cup-plate { border-color: rgba(45, 212, 191, .5); background: linear-gradient(160deg, rgba(14, 50, 52, .98), rgba(8, 22, 26, .98)); }
+.cup-all { margin: 6px 0 10px; }
+.cup-all summary { cursor: pointer; color: var(--mine); font-size: 12px; }
+.cup-overview { display: grid; gap: 12px; text-align: left; }
+.cup-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.cup-groups > div.mine h4 { color: var(--gold); }
+.cup-overview h4, .cup-ties h4, .matchday h4 { margin: 6px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.cup-ties p { margin: 2px 0; font-size: 12px; }
+.cup-ties p.you { color: var(--gold); }
+.cup-ties .won { font-weight: 700; }
+.cup-winner { color: var(--gold); font-weight: 600; }

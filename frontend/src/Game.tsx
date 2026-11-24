@@ -5,8 +5,8 @@ import ClubBoard, { Shootout, StatsTable } from './ClubBoard'
 import { MatchMarket } from './Market'
 import MatchView from './MatchView'
 import type { Photos } from './photos'
-import { CUPS, CUP_RULES, EPILOGUE, INTRO, PLEDGES, RIVALS, cupEnding, cupStage, reaction, stars } from './story'
-import { LeagueTable, Results, ord } from './League'
+import { CUPS, EPILOGUE, INTRO, PLEDGES, RIVALS, STAGES, cupEnding, cupStage, reaction, stars } from './story'
+import { CupOverview, LeagueTable, Results, Ties, ord } from './League'
 
 type MatchStage =
   | { stage: 'h1'; h1: HalfData }
@@ -41,13 +41,24 @@ function loadRun(fresh: boolean): Promise<RunView> {
   return loading
 }
 
-// What a European result means, for European match m (1..5).
+// What a result after the league means, for match m (1..6).
 function europeLine(r: HistoryEntry, m: number, cup?: CupView): string {
-  if (m > 3) return r.won ? (m === 5 ? '🏆 The trophy is yours!' : 'Through to the final!') : 'Out of Europe. The adventure ends here.'
+  if (cup?.playoff) {
+    if (!r.won && !r.draw) return 'A defeat. The owner has seen enough.'
+    const pts = r.won ? '+3 points.' : '+1 point.'
+    if (m < 3) return `${pts} Still alive.`
+    return `${pts} ${cup.out === 'promoted' ? 'First place: the club goes straight back up!' : 'Not first: the club stays down.'}`
+  }
+  if (m > 3) {
+    if (!r.won) return 'Out of Europe. The adventure ends here.'
+    return m === 6 ? '🏆 The trophy is yours!' : m === 5 ? 'Through to the final!' : 'Through to the semi-finals!'
+  }
   const pts = r.won ? '+3 points in the group.' : r.draw ? '+1 point in the group.' : 'No points in the group.'
   if (m < 3) return pts
-  return `${pts} ${cup?.out === 'group' ? 'Not enough: the group stage is as far as you go.' : 'You are through to the semi-final!'}`
+  return `${pts} ${cup?.out === 'group' ? 'Not enough: the group stage is as far as you go.' : 'You are through to the quarter-finals!'}`
 }
+
+const cupStageKey = (m: number) => (m <= 4 ? 'quarter' : m === 5 ? 'semi' : 'final')
 
 export default function Game({ meta, photos, fresh, onHome }: Props) {
   const [run, setRun] = useState<RunView | null>(null)
@@ -141,8 +152,8 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
         </button>
         <h1>Kickoff Tactics</h1>
         {run.cup ? (
-          <div className={`chip cup cup-${run.cup.id}`} title="Your European run">
-            <span className="cup-stars">{stars(run.cup.stars)}</span> {run.cup.name} · <b>{cupStage(run.cup.match)}</b>
+          <div className={`chip cup cup-${run.cup.id}`} title={run.cup.playoff ? 'The play-off after relegation' : 'Your European run'}>
+            <span className="cup-stars">{stars(run.cup.stars)}</span> {run.cup.name} · <b>{cupStage(run.cup.match, run.cup.playoff)}</b>
           </div>
         ) : (
           <div className="chip">
@@ -157,7 +168,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
             <b>{run.league.points}</b> pts · <b>{run.league.played ? ord(run.league.position) : '–'}</b>
           </div>
         )}
-        {!run.cup && (
+        {(!run.cup || run.cup.playoff) && (
           <div className="chip patience" title="The owner's patience. At zero you are sacked.">
             <span>Owner's patience</span>
             <div className="bar">
@@ -207,7 +218,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
             {run.phase === 'shop' && (
               <div className="rival">
                 <h3>
-                  {run.cup ? cupStage(run.cup.match) : `Matchday ${run.round}`}: {run.opponent.name}
+                  {run.cup ? cupStage(run.cup.match, run.cup.playoff) : `Matchday ${run.round}`}: {run.opponent.name}
                 </h3>
                 {RIVALS[run.opponent.name] && <p className="muted">{RIVALS[run.opponent.name]}</p>}
               </div>
@@ -215,9 +226,16 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
             {run.cup && (
               <>
                 <h3>
-                  {stars(run.cup.stars)} {run.cup.name}: group
+                  {stars(run.cup.stars)} {run.cup.name}
+                  {run.cup.playoff ? '' : `: group ${run.cup.groups[run.cup.mine]?.letter}`}
                 </h3>
                 <LeagueTable league={run.cup.group} compact group />
+                {!run.cup.playoff && (
+                  <details className="cup-all">
+                    <summary>All groups and the knockout bracket</summary>
+                    <CupOverview cup={run.cup} />
+                  </details>
+                )}
               </>
             )}
             {run.league && (
@@ -310,13 +328,34 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
               {match.h2.result.round > run.maxRounds && match.h2.result.round - run.maxRounds <= 3 && match.h2.run.cup && (
                 <div className="matchday">
                   <div>
-                    <h3>Group: the other match</h3>
-                    <Results results={match.h2.run.cup.group.last} />
+                    <h3>{match.h2.run.cup.playoff ? 'The other match' : `Matchday ${match.h2.result.round - run.maxRounds} around Europe`}</h3>
+                    {match.h2.run.cup.groups.map((g) =>
+                      g.last.some((r) => r.home !== 'Your Club' && r.away !== 'Your Club') ? (
+                        <div key={g.letter}>
+                          {!match.h2.run.cup?.playoff && <h4>Group {g.letter}</h4>}
+                          <Results results={g.last} />
+                        </div>
+                      ) : null,
+                    )}
                   </div>
                   <div>
-                    <h3>Group table</h3>
+                    <h3>Your group</h3>
                     <LeagueTable league={match.h2.run.cup.group} compact group />
                   </div>
+                </div>
+              )}
+              {match.h2.result.round - run.maxRounds > 3 && match.h2.run.cup && !match.h2.run.cup.playoff && (
+                <div className="matchday">
+                  <div>
+                    <h3>{STAGES[cupStageKey(match.h2.result.round - run.maxRounds)]}</h3>
+                    <Ties ties={match.h2.run.cup.ties.filter((t) => t.stage === cupStageKey(match.h2.result!.round - run.maxRounds))} />
+                  </div>
+                  {match.h2.run.cup.ties.some((t) => t.stage !== cupStageKey(match.h2.result!.round - run.maxRounds) && !t.winner) && (
+                    <div>
+                      <h3>Next</h3>
+                      <Ties ties={match.h2.run.cup.ties.filter((t) => !t.winner)} />
+                    </div>
+                  )}
                 </div>
               )}
               {match.h2.result.round <= run.maxRounds && match.h2.run.league && match.h2.run.league.last.length > 0 && (
@@ -361,7 +400,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
                 </small>
                 <h2>{cupEnding(run.cup.id, run.cup.out).title}</h2>
                 <p>{cupEnding(run.cup.id, run.cup.out).text}</p>
-                <p className="muted">League: {EPILOGUE[run.result]?.title}</p>
+                <p className="muted">League: {EPILOGUE[run.cup.playoff ? 'relegated' : run.result]?.title}</p>
               </>
             ) : (
               <>
@@ -370,7 +409,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
               </>
             )}
             <p>
-              {run.league && run.result !== 'sacked' && (
+              {run.league && (run.result !== 'sacked' || run.cup) && (
                 <>
                   Final position: <b>{ord(run.league.position)}</b> with <b>{run.league.points}</b> points.{' '}
                 </>
@@ -378,6 +417,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
               Record: {run.wins} wins, {run.draws} draws, {run.losses} defeats.
               {last && ` Last match: ${last.gf}–${last.ga} against ${last.opponent}.`}
             </p>
+            {run.cup && !run.cup.playoff && <CupOverview cup={run.cup} />}
             {run.league && <LeagueTable league={run.league} />}
             <div className="row center-row">
               <button onClick={onHome}>← Home</button>
@@ -406,13 +446,20 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
         <div className="overlay story-overlay">
           <div className={`dialog story cup-${run.cup.id}`}>
             <small className="story-kicker">
-              Chapter 2 · <span className="cup-stars">{stars(run.cup.stars)}</span>
+              {run.cup.playoff ? 'Last chance' : 'Chapter 2'}
+              {run.cup.stars > 0 && <span className="cup-stars"> · {stars(run.cup.stars)}</span>}
             </small>
             <h2>{run.cup.name}</h2>
             <p>{CUPS[run.cup.id]?.intro}</p>
-            <p>{CUP_RULES}</p>
+            <p>{CUPS[run.cup.id]?.rules}</p>
+            {!run.cup.playoff && (
+              <>
+                <h3>The draw</h3>
+                <CupOverview cup={run.cup} />
+              </>
+            )}
             <button className="primary big" onClick={() => setCupIntroSeen(true)}>
-              To Europe ✈
+              {run.cup.playoff ? 'One last chance' : 'To Europe ✈'}
             </button>
           </div>
         </div>

@@ -661,9 +661,10 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 	// The bot's order depends only on the half-time score, never on the player's choice.
 	bot := botTactic(NewRNG(seed^0xA5A5A5A5), half.Score)
 	orders := [2][2]string{{"balanced", tactic}, {"balanced", bot}}
-	m := r.cupMatch() // European match number, when in Europe
+	m := r.cupMatch() // match number after the league, in Europe or the play-off
+	playoff := r.Cup != nil && CupByID[r.Cup.ID].Playoff
 	var res *SimResult
-	if r.Cup != nil && m > CupGroupDays {
+	if r.Cup != nil && !playoff && m > CupGroupDays {
 		res = Simulate(seed, lus, orders, 2) // a knockout tie: penalties if level
 	} else {
 		res = SimulateLeague(seed, lus, orders)
@@ -672,10 +673,11 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 	h := HistoryEntry{Round: r.Round, Opponent: r.Opponent.Name, GF: res.Score[0], GA: res.Score[1], Pens: len(res.Pens) > 0, Won: res.Winner == 0, Draw: res.Winner < 0, Seed: r.Match.Seed, Commit: r.Match.Commit}
 	extra, note := r.settlePledge(h.Won, h.Draw, h.GF, h.GA)
 	h.Note = note
+	out := "" // how the run after the league ends, once it does
 	switch {
-	case r.Cup != nil && m <= CupGroupDays:
-		r.withRNG(func(g *RNG) { r.Cup.Group.playRound(g, m, h.GF, h.GA) })
-	case r.Cup == nil && r.League != nil:
+	case r.Cup != nil:
+		r.withRNG(func(g *RNG) { out = r.playCup(g, m, h) })
+	case r.League != nil:
 		r.withRNG(func(g *RNG) { r.League.playRound(g, r.Round, h.GF, h.GA) })
 	}
 	switch {
@@ -695,7 +697,7 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 			r.Streak = 0
 		}
 		r.Streak--
-		if r.Cup == nil { // Europe costs no patience: a defeat there only ends the run
+		if r.Cup == nil || playoff { // Europe costs no patience: a defeat there only ends the run
 			h.Damage = r.lessened(SoloDamage(r.Round, res.Score[1]-res.Score[0])) + extra
 			r.Patience -= h.Damage
 		}
@@ -707,8 +709,11 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 	case r.Patience <= 0:
 		r.Patience = 0
 		r.Phase, r.Result = "ended", "sacked"
+		if r.Cup != nil {
+			r.Cup.Out = "sacked"
+		}
 	case r.Cup != nil:
-		if r.Cup.Out = r.cupAfter(m, h.Won); r.Cup.Out != "" {
+		if r.Cup.Out = out; out != "" {
 			r.Phase = "ended"
 		} else {
 			goOn = true
@@ -718,6 +723,9 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 		if r.League != nil && cupFor(r.League.Position()) != "" {
 			id := cupFor(r.League.Position())
 			r.withRNG(func(g *RNG) { r.Cup = newCup(g, id) })
+			if id == PlayoffID {
+				r.Patience = 1 // the owner's last chance: any defeat is the sack
+			}
 			goOn = true
 		} else {
 			r.Phase = "ended"

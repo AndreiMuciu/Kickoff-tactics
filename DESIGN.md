@@ -52,16 +52,29 @@ results, and at the end) marks the champion, Europe (2-4) and relegation (9-10).
 by position: 1 champion, 2-4 European place, 5-8 mid-table, 9-10 relegated; sacked as before when
 patience runs out. Seasons from before the league are treated as absent and start again.
 
-**Europe** (2026-11-24, `game/cup.go`): a top-four club plays on with the same squad, budget and
-stadium, in one of three invented cups with their own clubs: 1st the European Crown (★★★), 2nd-3rd
-the European Shield (★★), 4th the European Plate (★). A group of four over three matchdays (the
-other group game is told, like the league's), the top two go to a semi-final and a final settled on
-the night (penalties if level). Europe costs no patience: a defeat only ends the run. Rounds 10-14
-of the run; no story events or augments there. A "Chapter 2" screen opens it, the epilogue tells
-how far the club went, and the history keeps it (`GameRecord.Cup` = `<cup>:<group|semi|final|winner>`).
+**After the league** (2026-11-24, `game/cup.go`), with the same squad, budget and stadium:
+
+- **Europe** for the top four: 1st the European Crown (★★★), 2nd-3rd the European Shield (★★), 4th
+  the European Plate (★). Each cup draws 15 opponents at random from its own pool of invented clubs
+  in real cities, shown with the country in brackets ("Racing Sevilla (Spain)"). The Crown pool is
+  the ten strongest football countries; the Shield has a few of those and many mid-level ones
+  (Poland, Romania, Hungary, Greece, Austria...); the Plate the smallest countries (Moldova,
+  Andorra, San Marino, Gibraltar...) plus two clubs from big ones. Each club has a rating (0-10)
+  that sets its line-up (`ratedTeam`) and its told results. Four groups of four over three
+  matchdays, then quarter-finals (A1-B2, B1-A2, C1-D2, D1-C2), semi-finals and a final, penalties
+  if level. Only your matches are played; every other group game and tie is told the same night,
+  so all groups and the bracket are visible and move as you go ("All groups and the knockout
+  bracket" under your group; the draw on the Chapter 2 screen; the whole cup in the epilogue,
+  told to the end so it names the winner). Europe costs no patience: a group finish outside the
+  top two, or a knockout defeat, ends the run.
+- **Play-off** for the bottom two (his request: a story for relegation): a mini group with three
+  of six second-division clubs (opponents as strong as league fixtures 6-8). Patience drops to 1,
+  so any defeat is the sack; only first place goes back up (`promoted`), otherwise `stayed`.
+
+History keeps the outcome (`GameRecord.Cup` = `<cup>:<group|quarter|semi|final|winner|promoted|stayed|sacked>`).
 League achievements (titles, Invincibles, Perfect Season, Survivor) are counted on the last league
-matchday; the run record (W/D/L) counts the European matches too. Bot play (1500 seasons) wins the
-Plate 17%, the Shield 10%, the Crown 5%; out in the group 40 / 50 / 63%.
+matchday; the run record (W/D/L) counts the later matches too. Bot play (1500 seasons): Plate won
+12%, Shield 6%, Crown 1-3% (out in the group 46 / 57 / 76%); play-off promoted 21-34%, sacked 55-60%.
 
 - **Market**: 5 players on offer, refreshed free each fixture; a new set costs 2. **Lock** keeps the
   current set for the next transfer window, once (as in TFT); a paid refresh unlocks it. The budget

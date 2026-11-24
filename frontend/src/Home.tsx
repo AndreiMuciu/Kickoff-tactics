@@ -184,15 +184,17 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
             <p>
               {s.phase === 'ended'
                 ? `Last season: ${RESULT[s.result] ?? 'finished'}${s.cup && s.cupOut ? `, then ${cupEnding(s.cup, s.cupOut).title}` : ''}. `
-                : s.cup
-                  ? `In Europe: ${CUPS[s.cup]?.name ?? 'a European cup'}. `
-                  : `Matchday ${s.round} of ${s.maxRounds}. `}
+                : s.cup === 'playoff'
+                  ? 'Relegated: in the promotion play-off, one defeat from the sack. '
+                  : s.cup
+                    ? `In Europe: ${CUPS[s.cup]?.name ?? 'a European cup'}. `
+                    : `Matchday ${s.round} of ${s.maxRounds}. `}
               {s.round > 1 || s.phase === 'ended' ? `${s.points} pts, ${ord(s.position)} in the league. ` : ''}
-              Record {s.wins}W {s.draws ?? 0}D {s.losses}L{inSeason && !s.cup ? `, owner's patience ${s.patience}.` : '.'}
+              Record {s.wins}W {s.draws ?? 0}D {s.losses}L{inSeason && (!s.cup || s.cup === 'playoff') ? `, owner's patience ${s.patience}.` : '.'}
               {s.phase === 'halftime' && ' You are at half-time.'}
             </p>
           ) : (
-            <p>A league of ten clubs over nine matchdays, and Europe for the top four. Your first stadium fits one outfield player and a keeper.</p>
+            <p>A league of ten clubs over nine matchdays: Europe for the top four, a play-off for the bottom two. Your first stadium fits one outfield player and a keeper.</p>
           )}
           <div className="hero-actions">
             {inSeason && (
