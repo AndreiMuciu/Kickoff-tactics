@@ -15,6 +15,7 @@ const (
 	LeagueTeams    = MaxRounds + 1
 	YourClub       = "Your Club"
 	EuropePlaces   = 4 // places 2-4 go to Europe; 1 is the champion
+	ShieldPlace    = 2 // only 2nd goes to the Shield; 3rd to EuropePlaces go to the Plate
 	RelegatedPlace = LeagueTeams - 1
 )
 

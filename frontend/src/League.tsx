@@ -8,7 +8,7 @@ export { ord }
 // European group (`group`) marks only the places that go through.
 export function LeagueTable({ league, compact, group, keyless }: { league: LeagueView; compact?: boolean; group?: boolean; keyless?: boolean }) {
   const zone = (pos: number) =>
-    group ? (pos <= league.europe ? 'europe' : '') : pos === 1 ? 'champ' : pos <= league.europe ? 'europe' : pos >= league.relegate ? 'drop' : ''
+    group ? (pos <= league.europe ? 'europe' : '') : pos === 1 ? 'champ' : pos === 2 ? 'shield' : pos <= league.europe ? 'plate' : pos >= league.relegate ? 'drop' : ''
 
   return (
     <div className={`league ${compact ? 'compact' : ''}`}>
@@ -56,7 +56,7 @@ export function LeagueTable({ league, compact, group, keyless }: { league: Leagu
         </p>
       ) : (
         <p className="league-key">
-          <i className="champ" /> Champions: European Crown <i className="europe" /> 2–3: Shield, {league.europe}: Plate <i className="drop" /> Relegation ({league.relegate}–{league.table.length})
+          <i className="champ" /> Champions: European Crown <i className="shield" /> 2: Shield <i className="plate" /> 3–{league.europe}: Plate <i className="drop" /> Relegation ({league.relegate}–{league.table.length})
         </p>
       )}
     </div>

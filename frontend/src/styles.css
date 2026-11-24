@@ -547,6 +547,8 @@ button.danger:disabled { opacity: .5; cursor: not-allowed; }
 .league tr td:first-child { border-left: 3px solid transparent; text-align: center; width: 22px; }
 .league tr.champ td:first-child { border-left-color: var(--gold); }
 .league tr.europe td:first-child { border-left-color: var(--mine); }
+.league tr.shield td:first-child { border-left-color: var(--theirs); }
+.league tr.plate td:first-child { border-left-color: #2dd4bf; }
 .league tr.drop td:first-child { border-left-color: var(--bad); }
 .league tr.you td { background: rgba(182, 242, 60, .1); font-weight: 700; }
 .league.compact { font-size: 12px; }
@@ -555,6 +557,8 @@ button.danger:disabled { opacity: .5; cursor: not-allowed; }
 .league-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: -6px; }
 .league-key i.champ { background: var(--gold); }
 .league-key i.europe { background: var(--mine); }
+.league-key i.shield { background: var(--theirs); }
+.league-key i.plate { background: #2dd4bf; }
 .league-key i.drop { background: var(--bad); }
 .league-results { display: grid; gap: 3px; font-size: 13px; }
 .league-results p { margin: 0; }

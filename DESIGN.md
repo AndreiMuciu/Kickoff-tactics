@@ -54,7 +54,7 @@ patience runs out. Seasons from before the league are treated as absent and star
 
 **After the league** (2026-11-24, `game/cup.go`), with the same squad, budget and stadium:
 
-- **Europe** for the top four: 1st the European Crown (★★★), 2nd-3rd the European Shield (★★), 4th
+- **Europe** for the top four: 1st the European Crown (★★★), 2nd the European Shield (★★), 3rd-4th
   the European Plate (★). Each cup draws 15 opponents at random from its own pool of invented clubs
   in real cities, shown with the country in brackets ("Racing Sevilla (Spain)"). The Crown pool is
   the ten strongest football countries; the Shield has a few of those and many mid-level ones

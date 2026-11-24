@@ -93,9 +93,9 @@ func cupFor(pos int) string {
 	switch {
 	case pos == 1:
 		return "crown"
-	case pos >= 2 && pos <= 3:
+	case pos == ShieldPlace:
 		return "shield"
-	case pos == EuropePlaces:
+	case pos > ShieldPlace && pos <= EuropePlaces:
 		return "plate"
 	case pos >= RelegatedPlace:
 		return PlayoffID

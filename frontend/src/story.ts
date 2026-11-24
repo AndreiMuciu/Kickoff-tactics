@@ -81,14 +81,14 @@ export const CUPS: Record<string, { name: string; stars: number; intro: string; 
     name: 'European Shield',
     stars: 2,
     intro:
-      'Second or third is good enough for the Shield. A few big names from the top leagues, and many proud clubs from Poland, Romania, Hungary, Greece and beyond, with long histories and loud away ends. None of them has heard of you yet.',
+      'Second place is good enough for the Shield. A few big names from the top leagues, and many proud clubs from Poland, Romania, Hungary, Greece and beyond, with long histories and loud away ends. None of them has heard of you yet.',
     rules: '',
   },
   plate: {
     name: 'European Plate',
     stars: 1,
     intro:
-      'Fourth place, and a ticket to the Plate: small clubs from every corner of the continent, from Moldova to Andorra, long bus rides, and one or two big-league sides who think this is beneath them.',
+      'Third or fourth, and a ticket to the Plate: small clubs from every corner of the continent, from Moldova to Andorra, long bus rides, and one or two big-league sides who think this is beneath them.',
     rules: '',
   },
   playoff: {
