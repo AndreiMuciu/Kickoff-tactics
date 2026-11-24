@@ -58,7 +58,7 @@ const STEPS: { icon: string; title: string; text: string[] }[] = [
     title: 'Money, augments and items',
     text: [
       'After every match you receive 5 💰, plus 1 for a win and a little more for a streak, good or bad. Money in the bank earns interest: +1 for every 10 💰 kept, up to +5. Saving pays.',
-      'In rounds 2, 5 and 8 you also choose an augment: a boost for the rest of the game, from extra money to a crest that counts as one more player of a style. Every third round a piece of kit lands in your kit bag (Golden Boots, Sprint Spikes, Grip Gloves for the keeper…): click it, then click the player who should wear it. One item per player; selling him gives it back.',
+      'In rounds 2, 5 and 8 you also choose an augment: a boost for the rest of the game, from extra money to a crest that counts as one more player of a style. Every third round a piece of kit lands in your kit bag: click it, then the player who should wear it. Two components make a finished item, like Boots + Spikes = Poacher: drop one on the other (the recipes are in the kit bag). One item per player; selling him gives it back.',
     ],
   },
   {

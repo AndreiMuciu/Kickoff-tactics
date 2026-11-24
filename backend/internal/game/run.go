@@ -126,9 +126,11 @@ type Action struct {
 	Type string `json:"type"`
 	Slot int    `json:"slot"`
 	Def  string `json:"def"` // buy: the player the manager saw in that slot
-	UID  string `json:"uid"`
-	Line int    `json:"line"`
-	Lane int    `json:"lane"`
+	// combine: the second kit-bag item, Slot being the first
+	Slot2 int    `json:"slot2"`
+	UID   string `json:"uid"`
+	Line  int    `json:"line"`
+	Lane  int    `json:"lane"`
 }
 
 func randomSeed() (uint64, string, error) {
@@ -555,6 +557,8 @@ func (r *Run) Apply(a Action) error {
 		return r.equip(a.Slot, a.UID)
 	case "unequip":
 		return r.unequip(a.UID)
+	case "combine":
+		return r.combine(a.Slot, a.Slot2)
 	case "story":
 		return r.chooseStory(a.Slot)
 	case "levelup":

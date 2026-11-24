@@ -30,8 +30,13 @@ func TestItems(t *testing.T) {
 	if err := r.equip(0, "a"); err != nil || r.find("a").Item != "boots" {
 		t.Fatalf("boots: %v", err)
 	}
-	// Equipping another item swaps: the boots go back to the bag.
-	if err := r.Apply(Action{Type: "equip", Slot: 0, UID: "a"}); err != nil || r.find("a").Item != "spikes" || fmt.Sprint(r.Items) != "[boots]" {
+	// A component handed to a player wearing one makes the finished item.
+	if err := r.Apply(Action{Type: "equip", Slot: 0, UID: "a"}); err != nil || r.find("a").Item != "poacher" || len(r.Items) != 0 {
+		t.Fatalf("combine on a player: %v, wearing %q, bag %v", err, r.find("a").Item, r.Items)
+	}
+	// A finished item is swapped, not combined: the old one goes back to the bag.
+	r.Items = []string{"drink"}
+	if err := r.Apply(Action{Type: "equip", Slot: 0, UID: "a"}); err != nil || r.find("a").Item != "drink" || fmt.Sprint(r.Items) != "[poacher]" {
 		t.Fatalf("swap: %v, wearing %q, bag %v", err, r.find("a").Item, r.Items)
 	}
 	if err := r.Apply(Action{Type: "equip", Slot: 0, UID: "b"}); err != nil {
@@ -95,5 +100,59 @@ func TestBotsUseItems(t *testing.T) {
 		if u.Item != "" && u.Line < 0 {
 			t.Fatalf("an item went to the bench: %+v", u)
 		}
+	}
+}
+
+// Every component combines with every other and with itself; the finished
+// items keep both stats and are described.
+func TestRecipes(t *testing.T) {
+	var comps []string
+	for _, it := range Items {
+		if it.Component && !it.Keeper {
+			comps = append(comps, it.ID)
+		}
+	}
+	n := 0
+	for i, a := range comps {
+		for _, b := range comps[i:] {
+			id := Recipe(a, b)
+			it := ItemByID[id]
+			if it == nil || it.Desc == "" || it.Keeper || Recipe(b, a) != id {
+				t.Fatalf("%s + %s: %q", a, b, id)
+			}
+			for k := range it.stat {
+				if want := ItemByID[a].stat[k] + ItemByID[b].stat[k]; want > 0 && it.stat[k] <= 1 {
+					t.Fatalf("%s lost stat %d", id, k)
+				}
+			}
+			n++
+		}
+	}
+	if n != 21 {
+		t.Fatalf("%d recipes, want 21", n)
+	}
+	r, _ := NewRun("combine")
+	r.Items = []string{"gloves", "drink", "compass"}
+	if err := r.Apply(Action{Type: "combine", Slot: 0, Slot2: 1}); err == nil {
+		t.Fatal("gloves and a drink combined")
+	}
+	if err := r.Apply(Action{Type: "combine", Slot: 2, Slot2: 0}); err != nil || fmt.Sprint(r.Items) != "[drink sweeper_keeper]" {
+		t.Fatalf("combine in the bag: %v, bag %v", err, r.Items)
+	}
+	if err := r.equip(1, "u1"); err != nil || r.find("u1").Item != "sweeper_keeper" {
+		t.Fatalf("keeper item: %v", err)
+	}
+	// Only items that drop arrive in the bag.
+	g := NewRNG(9)
+	for r.Round = 3; r.Round < 300; r.Round += 3 {
+		r.dropItem(g)
+	}
+	for _, id := range r.Items {
+		if ItemByID[id].Parts[0] != "" {
+			t.Fatalf("a finished item dropped: %s", id)
+		}
+	}
+	for _, it := range Items {
+		t.Logf("%s %s: %s", it.Icon, it.Name, it.Desc)
 	}
 }

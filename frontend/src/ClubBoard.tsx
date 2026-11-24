@@ -92,31 +92,66 @@ function PlayerCard({ unit, def, photo, selected, enemy, item }: { unit: Unit; d
 }
 
 // The kit bag: items not handed to a player yet. Pick one, then click a
-// player (or drag it onto him) to hand it over.
-function KitBag({ meta, items, picked, canAct, onPick }: { meta: Meta; items: string[]; picked: number | null; canAct: boolean; onPick: (i: number | null) => void }) {
+// player (or drag it onto him) to hand it over; pick or drag it onto another
+// item to combine the two into a finished item.
+function KitBag({ meta, items, picked, canAct, onPick, onCombine }: {
+  meta: Meta
+  items: string[]
+  picked: number | null
+  canAct: boolean
+  onPick: (i: number | null) => void
+  onCombine: (a: number, b: number) => void
+}) {
   const defs = Object.fromEntries((meta.items ?? []).map((it) => [it.id, it]))
+  const recipes = (meta.items ?? []).filter((it) => it.parts?.[0])
+  const made = (a: string, b: string) => recipes.find((r) => r.parts && ((r.parts[0] === a && r.parts[1] === b) || (r.parts[0] === b && r.parts[1] === a)))
+  const pickedId = picked !== null ? items[picked] : null
+  const click = (i: number) => {
+    if (picked !== null && picked !== i && pickedId && made(pickedId, items[i])) onCombine(picked, i)
+    else onPick(picked === i ? null : i)
+  }
   return (
     <div className="panel kitbag">
       <h3>Kit bag</h3>
       {items.length === 0 && <p className="muted">Empty. A new item arrives every {meta.itemEvery ?? 3} rounds.</p>}
-      {items.map((id, i) => (
-        <button
-          key={i}
-          className={`kit-item ${picked === i ? 'on' : ''}`}
-          disabled={!canAct}
-          draggable={canAct}
-          onDragStart={(e) => e.dataTransfer.setData('text/plain', `item:${i}`)}
-          onClick={() => onPick(picked === i ? null : i)}
-          title={defs[id]?.desc}
-        >
-          <b>
-            {defs[id]?.icon} {defs[id]?.name ?? id}
-          </b>
-          <small>{defs[id]?.desc}</small>
-        </button>
-      ))}
-      {picked !== null && <p className="muted small">Now click the player who should wear it.</p>}
-      {items.length > 0 && picked === null && <p className="muted small">One item per player. Selling a player gives his item back.</p>}
+      {items.map((id, i) => {
+        const result = pickedId && picked !== i ? made(pickedId, id) : undefined
+        return (
+          <button
+            key={i}
+            className={`kit-item ${picked === i ? 'on' : ''} ${result ? 'combines' : ''}`}
+            disabled={!canAct}
+            draggable={canAct}
+            onDragStart={(e) => e.dataTransfer.setData('text/plain', `item:${i}`)}
+            onDragOver={(e) => canAct && e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault()
+              const from = e.dataTransfer.getData('text/plain')
+              if (from.startsWith('item:') && Number(from.slice(5)) !== i) onCombine(Number(from.slice(5)), i)
+            }}
+            onClick={() => click(i)}
+            title={defs[id]?.desc}
+          >
+            <b>
+              {defs[id]?.icon} {defs[id]?.name ?? id}
+            </b>
+            <small>{result ? `Combine → ${result.icon} ${result.name}` : defs[id]?.desc}</small>
+          </button>
+        )
+      })}
+      {pickedId && <p className="muted small">Click a player to hand it over{defs[pickedId]?.component ? ', or another item to combine them' : ''}.</p>}
+      {items.length > 0 && !pickedId && <p className="muted small">One item per player. Two components make a finished item: drop one on another, or on a player who wears one.</p>}
+      <details className="recipes">
+        <summary>All recipes ({recipes.length})</summary>
+        {recipes.map((r) => (
+          <p key={r.id} title={r.desc}>
+            {defs[r.parts![0]]?.icon} + {defs[r.parts![1]]?.icon} = <b>
+              {r.icon} {r.name}
+            </b>
+            <small>{r.desc}</small>
+          </p>
+        ))}
+      </details>
     </div>
   )
 }
@@ -368,7 +403,16 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
       <section className="side">
         <SynergyList list={view.synergies} meta={meta} title="Your team" />
         {(meta.augments?.length ?? 0) > 0 && <AugmentList meta={meta} list={view.augments} />}
-        {(meta.items?.length ?? 0) > 0 && <KitBag meta={meta} items={view.items ?? []} picked={canAct ? picked : null} canAct={canAct && !busy} onPick={(i) => (setPicked(i), setSelected(null))} />}
+        {(meta.items?.length ?? 0) > 0 && (
+          <KitBag
+            meta={meta}
+            items={view.items ?? []}
+            picked={canAct ? picked : null}
+            canAct={canAct && !busy}
+            onPick={(i) => (setPicked(i), setSelected(null))}
+            onCombine={(a, b) => (onAction({ type: 'combine', slot: a, slot2: b }), setPicked(null))}
+          />
+        )}
         <PlayerSheet stars={shown?.stars ?? 1} def={shown ? defs[shown.def] : null} meta={meta} photo={shown ? photos[shown.def] : undefined} />
       </section>
 

@@ -624,3 +624,7 @@ button.danger:disabled { opacity: .5; cursor: not-allowed; }
 .kitbag .kit-item small { color: var(--muted); font-weight: 400; }
 .kitbag .kit-item.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
 .sell.unequip { flex: 0 0 auto; }
+.kitbag .kit-item.combines { border-color: var(--good); }
+.kitbag .recipes summary { cursor: pointer; color: var(--mine); font-size: 12px; margin-top: 4px; }
+.kitbag .recipes p { margin: 6px 0; font-size: 12px; display: grid; gap: 1px; }
+.kitbag .recipes small { color: var(--muted); }

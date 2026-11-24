@@ -68,6 +68,8 @@ export interface ItemDef {
   name: string
   desc: string
   keeper?: boolean // goalkeepers only
+  component?: boolean // combines with another into a finished item
+  parts?: [string, string] // a finished item: what it is made of
 }
 export interface SynergyView {
   id: string
@@ -249,6 +251,7 @@ export type Action =
   | { type: 'story'; slot: number }
   | { type: 'equip'; slot: number; uid: string }
   | { type: 'unequip'; uid: string }
+  | { type: 'combine'; slot: number; slot2: number }
 
 export interface SeasonSummary {
   phase: 'shop' | 'halftime' | 'ended'

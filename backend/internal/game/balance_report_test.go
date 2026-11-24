@@ -479,3 +479,47 @@ func TestBalanceAugments(t *testing.T) {
 		t.Logf("%-22s average place %.2f (%d lobbies)", r.id, r.avg, cnt[r.id])
 	}
 }
+
+// What each item is worth: the same six players on both sides, one side with
+// the item on the player who suits it best (the keeper for keeper items).
+func TestBalanceItems(t *testing.T) {
+	skipUnlessReport(t)
+	pool := outfieldPool(nil)
+	for _, it := range Items {
+		wins, n := 0, 3000
+		for k := 0; k < n; k++ {
+			g := NewRNG(uint64(k)*131 + 17)
+			lu := shape(pick(g, pool, 6, map[string]bool{}))
+			with := lu
+			with.Units = append([]LineupUnit(nil), lu.Units...)
+			if it.Keeper {
+				with.GK.Item = it.ID
+			} else {
+				// On the player who suits it best, as a manager would: the
+				// highest value in the item's first stat.
+				k0 := 0
+				for k, m := range it.stat {
+					if m > 0 {
+						k0 = k
+						break
+					}
+				}
+				best := 0
+				for i, u := range with.Units {
+					if PlayerByID[u.DefID].Stats[k0] > PlayerByID[with.Units[best].DefID].Stats[k0] {
+						best = i
+					}
+				}
+				with.Units[best].Item = it.ID
+			}
+			sides := [2]Lineup{with, lu}
+			if k%2 == 1 {
+				sides = [2]Lineup{lu, with}
+			}
+			if Simulate(uint64(k)*7+3, sides, balanced, 2).Winner == k%2 {
+				wins++
+			}
+		}
+		t.Logf("%-24s wins %.1f%%", it.Name, 100*float64(wins)/float64(n))
+	}
+}
