@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"testing"
 	"time"
 
+	"footy/internal/game"
 	"footy/internal/store"
 )
 
@@ -68,3 +70,24 @@ func TestAchievementLevels(t *testing.T) {
 }
 
 func testLog() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+
+// How a run after the league ends feeds the cup and play-off achievements.
+func TestCupStats(t *testing.T) {
+	for _, c := range []struct {
+		cup, out, result string
+		want             map[string]int
+	}{
+		{"crown", "winner", "champion", map[string]int{"cupQuarters": 1, "cupWins": 1, "crownWins": 1, "doubles": 1}},
+		{"shield", "winner", "europe", map[string]int{"cupQuarters": 1, "cupWins": 1}},
+		{"plate", "semi", "europe", map[string]int{"cupQuarters": 1}},
+		{"crown", "group", "champion", map[string]int{}},
+		{"playoff", "promoted", "relegated", map[string]int{"promotions": 1}},
+		{"playoff", "sacked", "sacked", map[string]int{}},
+	} {
+		d := map[string]int{}
+		cupStats(d, &game.Run{Result: c.result, Cup: &game.Cup{ID: c.cup, Out: c.out}})
+		if fmt.Sprint(d) != fmt.Sprint(c.want) {
+			t.Errorf("%s %s: %v, want %v", c.cup, c.out, d, c.want)
+		}
+	}
+}

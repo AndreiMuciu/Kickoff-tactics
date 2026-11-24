@@ -508,7 +508,7 @@ Esc and arrow keys work, and "📖 How to play" on Home opens it again.
 
 ## Profile, achievements, history, feedback [in demo]
 
-- **Achievements** (19, `api/achievements.go`), each with five levels (2026-11-23): Bronze the first
+- **Achievements** (24, `api/achievements.go`; five added on 2026-11-24 for the run after the league: European Nights = reach the quarter-finals, Conquerors of Europe = win any cup, Kings of the Continent = win the Crown, The Double = league + Crown in one season, Bounce Back = win the play-off), each with five levels (2026-11-23): Bronze the first
   time, then Silver, Gold, Platinum and Diamond as the same feat repeats (e.g. wins 1/10/50/150/500,
   league titles 1/3/10/25/50, Invincibles and Perfect Season 1/2/5/10/25, Climber = ranked points
   100/250/450/700/1000). A level is stored with its date under `<id>` (Bronze) or `<id>@<n>`;

@@ -509,6 +509,7 @@ func (s *Server) secondHalf(w http.ResponseWriter, r *http.Request, sid string) 
 		if run.Phase == "ended" {
 			d["seasons"] = 1
 			gameStats(d, run)
+			cupStats(d, run)
 			g := store.GameRecord{UserID: sid, Mode: "solo", Result: run.Result, Of: game.LeagueTeams}
 			if run.League != nil {
 				g.Place, g.Points = run.League.Position(), run.League.Mine().Pts

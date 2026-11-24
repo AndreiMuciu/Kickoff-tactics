@@ -45,6 +45,11 @@ var achievements = []achievement{
 	{ID: "champion", Icon: "🏆", Name: "Champions!", One: "Win the solo league.", Many: "Win the solo league %d times.", Stat: "titles", Levels: [5]int{1, 3, 10, 25, 50}},
 	{ID: "unbeaten", Icon: "🛡", Name: "Invincibles", One: "Win the solo league without losing a match.", Many: "Win the solo league unbeaten %d times.", Stat: "unbeatenTitles", Levels: [5]int{1, 2, 5, 10, 25}},
 	{ID: "perfect", Icon: "👑", Name: "Perfect Season", One: "Win every match of a solo season.", Many: "Win every match of a solo season %d times.", Stat: "perfectSeasons", Levels: [5]int{1, 2, 5, 10, 25}},
+	{ID: "europe_qf", Icon: "✈️", Name: "European Nights", One: "Reach the quarter-finals of a European cup.", Many: "Reach the European quarter-finals %d times.", Stat: "cupQuarters", Levels: [5]int{1, 3, 10, 25, 50}},
+	{ID: "europe_win", Icon: "🌍", Name: "Conquerors of Europe", One: "Win a European cup.", Many: "Win %d European cups.", Stat: "cupWins", Levels: [5]int{1, 3, 10, 25, 50}},
+	{ID: "crown", Icon: "💎", Name: "Kings of the Continent", One: "Win the European Crown.", Many: "Win the European Crown %d times.", Stat: "crownWins", Levels: [5]int{1, 2, 5, 10, 25}},
+	{ID: "double", Icon: "🥂", Name: "The Double", One: "Win the league and the European Crown in the same season.", Many: "Win the league and the European Crown in the same season %d times.", Stat: "doubles", Levels: [5]int{1, 2, 5, 10, 25}},
+	{ID: "bounce", Icon: "⬆️", Name: "Bounce Back", One: "Win the promotion play-off after relegation.", Many: "Win the promotion play-off %d times.", Stat: "promotions", Levels: [5]int{1, 3, 10, 25, 50}},
 	{ID: "lobby", Icon: "🎟", Name: "Lobby Regular", One: "Finish a lobby.", Many: "Finish %d lobbies.", Stat: "lobbies", Levels: [5]int{1, 10, 50, 150, 500}},
 	{ID: "top4", Icon: "4️⃣", Name: "Top Four", One: "Finish a lobby in the top 4.", Many: "Finish in the top 4 %d times.", Stat: "lobbyTop4", Levels: [5]int{1, 10, 50, 150, 500}},
 	{ID: "lobby_win", Icon: "🥇", Name: "Last One Standing", One: "Win a lobby.", Many: "Win %d lobbies.", Stat: "lobbyWins", Levels: [5]int{1, 5, 20, 50, 150}},
@@ -252,6 +257,29 @@ func gameStats(d map[string]int, run *game.Run) {
 	}
 	if run.Level >= game.MaxLevel {
 		d["fullStadiums"]++
+	}
+}
+
+// cupStats adds how the run after the league ended: Europe or the play-off.
+func cupStats(d map[string]int, run *game.Run) {
+	c := run.Cup
+	if c == nil {
+		return
+	}
+	switch c.Out {
+	case "quarter", "semi", "final", "winner":
+		d["cupQuarters"]++
+	case "promoted":
+		d["promotions"]++
+	}
+	if c.Out == "winner" {
+		d["cupWins"]++
+		if c.ID == "crown" {
+			d["crownWins"]++
+			if run.Result == "champion" {
+				d["doubles"]++
+			}
+		}
 	}
 }
 
