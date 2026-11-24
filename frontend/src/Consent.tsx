@@ -3,12 +3,12 @@ import { useEffect, useState } from 'react'
 // Cookie choice: "Essential only" keeps just the sign-in cookie; "Accept all"
 // also loads Cloudflare Web Analytics (anonymous visit counts). The beacon is
 // loaded here, only after "Accept all", so Cloudflare's automatic injection
-// must stay off. Its token comes from the build (VITE_CF_ANALYTICS_TOKEN); it
-// is public anyway, it ends up in the page.
+// must stay off (Web Analytics: manual JS snippet setup). The token is public:
+// it ends up in the page anyway. VITE_CF_ANALYTICS_TOKEN overrides it.
 
 type Choice = 'essential' | 'all'
 const KEY = 'autofootball-consent-v1'
-const TOKEN = import.meta.env.VITE_CF_ANALYTICS_TOKEN as string | undefined
+const TOKEN = (import.meta.env.VITE_CF_ANALYTICS_TOKEN as string | undefined) || 'd733d0c280db48a685bfa9910a201e39'
 
 function read(): Choice | null {
   try {

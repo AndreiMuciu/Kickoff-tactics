@@ -634,9 +634,9 @@ shows the season and when it ends; history rows carry their season.
 The banner offers "Essential only" (just the sign-in cookie) or "Accept all", which also loads
 Cloudflare Web Analytics (`src/Consent.tsx`, choice in localStorage `autofootball-consent-v1`,
 "Cookie settings" on the sign-in page and in the Home footer reopens it). The beacon is loaded
-by the page only after consent, with the token from the build variable `VITE_CF_ANALYTICS_TOKEN`
-(Cloudflare Pages, build environment). Cloudflare's automatic injection must stay off, or it
-would load for everyone. No token: no analytics.
+by the page only after consent, with the site token in `Consent.tsx` (public; the build
+variable `VITE_CF_ANALYTICS_TOKEN` overrides it). The Web Analytics site is set to manual
+JS-snippet setup: Cloudflare's automatic injection must stay off, or it would load for everyone.
 
 ## Not built yet
 
