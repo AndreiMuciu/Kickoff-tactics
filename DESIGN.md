@@ -629,6 +629,15 @@ shows the season and when it ends; history rows carry their season.
   copy the text with the link. Link previews: `og:`/`twitter:` tags in `index.html`, image
   `public/og.jpg` (1200 × 630).
 
+## Cookies and analytics [in demo]
+
+The banner offers "Essential only" (just the sign-in cookie) or "Accept all", which also loads
+Cloudflare Web Analytics (`src/Consent.tsx`, choice in localStorage `autofootball-consent-v1`,
+"Cookie settings" on the sign-in page and in the Home footer reopens it). The beacon is loaded
+by the page only after consent, with the token from the build variable `VITE_CF_ANALYTICS_TOKEN`
+(Cloudflare Pages, build environment). Cloudflare's automatic injection must stay off, or it
+would load for everyone. No token: no analytics.
+
 ## Not built yet
 
 - Rating by opponent strength (points depend on place and own division only),

@@ -7,6 +7,7 @@ import Profile from './Profile'
 import Tutorial from './Tutorial'
 import Daily from './Daily'
 import Claim from './Claim'
+import { openConsent } from './Consent'
 import { ord } from './League'
 import { CUPS, cupEnding } from './story'
 
@@ -615,7 +616,10 @@ export default function Home({ me, challenger, onDaily, ranked, onRanked, onPart
         <a href="https://commons.wikimedia.org/" target="_blank" rel="noreferrer noopener">
           Wikimedia Commons
         </a>
-        .
+        .{' '}
+        <button className="link" onClick={openConsent}>
+          Cookie settings
+        </button>
       </footer>
     </div>
   )

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, ApiError } from './api'
+import { openConsent } from './Consent'
 
 type Mode = 'login' | 'signup' | 'forgot' | 'reset'
 
@@ -165,6 +166,9 @@ export default function Auth({ invitedBy, challenger, onGuest, resetToken, onRes
           </button>
         )}
       </form>
+      <button type="button" className="link cookie-link" onClick={openConsent}>
+        Cookie settings
+      </button>
     </div>
   )
 }

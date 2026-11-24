@@ -646,3 +646,5 @@ button.danger:disabled { opacity: .5; cursor: not-allowed; }
 .dialog.claim { width: min(440px, 100%); }
 .dialog.claim .auth { width: 100%; padding: 0; border: 0; background: none; }
 .home-col.challenged .daily { order: -1; }
+.cookie-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.cookie-link { font-size: 12px; color: var(--muted); }

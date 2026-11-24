@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from './api'
 import type { Me, Meta, RankedView, SeriesView } from './api'
 import Auth from './Auth'
+import Consent from './Consent'
 import Feedback from './Feedback'
 import Game from './Game'
 import Home from './Home'
@@ -49,38 +50,6 @@ function NotFound() {
       <a className="button primary" href="/">
         Back to the game
       </a>
-    </div>
-  )
-}
-
-function CookieNotice() {
-  const KEY = 'autofootball-cookie-notice'
-  const [show, setShow] = useState(() => {
-    try {
-      return localStorage.getItem(KEY) !== '1'
-    } catch {
-      return true
-    }
-  })
-  if (!show) return null
-  return (
-    <div className="cookie-bar" role="region" aria-label="Cookies">
-      <span>
-        We use <b>one cookie</b>, to keep you signed in. No ads, no tracking cookies: visits are only counted anonymously. Player photos come from Wikimedia.
-      </span>
-      <button
-        className="primary"
-        onClick={() => {
-          try {
-            localStorage.setItem(KEY, '1')
-          } catch {
-            /* private mode: the notice simply shows again next time */
-          }
-          setShow(false)
-        }}
-      >
-        Got it
-      </button>
     </div>
   )
 }
@@ -233,7 +202,7 @@ export default function App() {
             void loadMe()
           }}
         />
-        <CookieNotice />
+        <Consent />
         {toast && <div className="toast">{toast}</div>}
       </>
     )
@@ -357,7 +326,7 @@ export default function App() {
           )}
         </div>
       )}
-      <CookieNotice />
+      <Consent />
       {toast && <div className="toast">{toast}</div>}
       <Feedback
         screen={view.at === 'game' ? 'solo' : 'home'}
