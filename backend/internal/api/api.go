@@ -492,24 +492,29 @@ func (s *Server) secondHalf(w http.ResponseWriter, r *http.Request, sid string) 
 	if h != nil {
 		d := map[string]int{}
 		matchStats(d, *h)
-		if run.Phase == "ended" {
-			d["seasons"] = 1
-			if run.Result != "sacked" {
-				d["seasonsSurvived"] = 1
-			}
+		// The league is decided on its last matchday, whether or not Europe follows.
+		if h.Round == game.MaxRounds && run.Result != "sacked" && run.League != nil {
+			d["seasonsSurvived"] = 1
+			me := run.League.Mine()
 			if run.Result == "champion" {
 				d["titles"] = 1
+				if me.L == 0 {
+					d["unbeatenTitles"] = 1
+				}
 			}
-			if run.Wins == game.MaxRounds {
+			if me.W == game.MaxRounds {
 				d["perfectSeasons"] = 1
 			}
-			if run.Result == "champion" && run.Losses == 0 {
-				d["unbeatenTitles"] = 1
-			}
+		}
+		if run.Phase == "ended" {
+			d["seasons"] = 1
 			gameStats(d, run)
 			g := store.GameRecord{UserID: sid, Mode: "solo", Result: run.Result, Of: game.LeagueTeams}
 			if run.League != nil {
-				g.Place, g.Points = run.League.Position(), run.View().League.Points
+				g.Place, g.Points = run.League.Position(), run.League.Mine().Pts
+			}
+			if run.Cup != nil {
+				g.Cup = run.Cup.ID + ":" + run.Cup.Out
 			}
 			s.recordGame(r.Context(), g, run)
 		}

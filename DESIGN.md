@@ -52,6 +52,17 @@ results, and at the end) marks the champion, Europe (2-4) and relegation (9-10).
 by position: 1 champion, 2-4 European place, 5-8 mid-table, 9-10 relegated; sacked as before when
 patience runs out. Seasons from before the league are treated as absent and start again.
 
+**Europe** (2026-11-24, `game/cup.go`): a top-four club plays on with the same squad, budget and
+stadium, in one of three invented cups with their own clubs: 1st the European Crown (★★★), 2nd-3rd
+the European Shield (★★), 4th the European Plate (★). A group of four over three matchdays (the
+other group game is told, like the league's), the top two go to a semi-final and a final settled on
+the night (penalties if level). Europe costs no patience: a defeat only ends the run. Rounds 10-14
+of the run; no story events or augments there. A "Chapter 2" screen opens it, the epilogue tells
+how far the club went, and the history keeps it (`GameRecord.Cup` = `<cup>:<group|semi|final|winner>`).
+League achievements (titles, Invincibles, Perfect Season, Survivor) are counted on the last league
+matchday; the run record (W/D/L) counts the European matches too. Bot play (1500 seasons) wins the
+Plate 17%, the Shield 10%, the Crown 5%; out in the group 40 / 50 / 63%.
+
 - **Market**: 5 players on offer, refreshed free each fixture; a new set costs 2. **Lock** keeps the
   current set for the next transfer window, once (as in TFT); a paid refresh unlocks it. The budget
   is shown next to the market buttons.
@@ -65,9 +76,9 @@ patience runs out. Seasons from before the league are treated as absent and star
   none is chosen when the window closes, the first is taken (bots always take the first). At most
   one crest per offer. Economy: Transfer Windfall (+10 now), Shrewd Investor (interest up to +7),
   Shirt Sponsor (+2 per match), Scouting Network (first refresh of each window free), Stadium
-  Expansion (+8 XP now), Trusted by the Board (defeats cost 30% less patience, at least 1), Squad
-  Rotation (one more outfield player). Team: Fitness Coach (drain -25%), Home Crowd (all stats +4%),
-  Finishing School (shooting +12%), Defensive Coach (opponent chances -10%), Penalty Specialist
+  Expansion (+8 XP now), Trusted by the Board (defeats cost 10% less patience, at least 1), Squad
+  Rotation (one more outfield player). Team: Fitness Coach (drain -40%), Home Crowd (all stats +3%),
+  Finishing School (shooting +18%), Defensive Coach (opponent chances -14%), Penalty Specialist
   (+10% to score penalties and shootout kicks). Crests: one per style, count as one more player of
   that style. Team effects and crests travel in the frozen line-up (`Lineup.Augments`), so a replay
   stays deterministic. Not balance-measured yet.
@@ -133,6 +144,12 @@ whole match instantly and sends position frames plus events; the client only rep
   Both sides always choose: the server's club by the half-time score, a friend in secret.
   Three more orders: Counter-Attack (sit deep, sprint when the ball is won), Long Balls (every pass
   looks forward, less accurate), Shoot on Sight (many more shots, long shots 70% better).
+  Measured on 2026-11-24, Long Balls and Shoot on Sight were never the best choice, so each became
+  an answer to another order (`TestOrderCounters`, matrix in `matrix_test.go`): Long Balls gets
+  better chances against a team that pushes up (`Behind` x its Push: All-Out, Full Press), Shoot on
+  Sight's long shots ignore a deep defence and get better against it (`Edge` x how deep it sits:
+  Park the Bus, Counter-Attack). Trailing against Park the Bus, Shoot on Sight wins 15.5% against
+  11.1% for All-Out; level against All-Out, Long Balls wins 57%, the best of all.
   **Every order also instructs the goalkeeper**: All-Out makes him launch it at once and stand off
   his line (long shots against +30%), Park the Bus makes him waste time (holds the ball 2.4 s, almost
   never intercepted), Full Press has him play short and fast (cut out twice as often), Keep the Ball
@@ -238,6 +255,12 @@ five scores, penalties 0.050 a match instead of 0.015.
   better than the bot.
 - **League** (2026-11-21, bot play, 400 seasons): 10% champions, 42% Europe, 35% mid-table,
   3.5% relegated, 8% sacked; the champion ends on about 20 points of 27, the bot on 14.5.
+- **Augments** (2026-11-24, `TestBalanceAugments`: 900 lobbies of eight bots, each club handed a
+  different augment at round 2, average final place, 4.5 neutral): Trusted by the Board was far too
+  strong (2.84, defeats cost 30% less) and is now 10% less (about 4.1); Home Crowd 4% -> 3%, Fitness
+  Coach and Finishing School and Defensive Coach were raised. After tuning everything sits between
+  3.8 and 4.7 (noise about ±0.12). Scouting Network and Shrewd Investor look weak only because bots
+  never refresh the market or save money.
 - `TestMatchInvariants` plays 4000 random matches and checks that score, goal events, shootouts,
   sendings-off and positions tell one story.
 
@@ -461,6 +484,14 @@ account (`plan`), so it is the same in a solo season, a live series and every lo
   needed, players whose price the market does not offer at this level, and combinations one player
   short of the next tier.
 - The plan never buys, sells or moves anyone.
+
+## Tutorial [in demo]
+
+`frontend/src/Tutorial.tsx`, 2026-11-24: eight short steps (market, merging, stadium, pitch and
+combinations, match day and orders, money and augments, ways to play). It opens by itself on Home
+for a manager who has not played a match yet (`/api/me` `newPlayer` = no `matches` stat) and has
+not closed it on this browser (localStorage `autofootball-tutorial-<name>`); Skip on every step,
+Esc and arrow keys work, and "📖 How to play" on Home opens it again.
 
 ## Profile, achievements, history, feedback [in demo]
 

@@ -110,6 +110,15 @@ export interface LeagueView {
   europe: number // last European place
   relegate: number // first relegation place
 }
+export interface CupView {
+  id: string
+  name: string
+  stars: number
+  match: number // the current (or last) European match, 1..5
+  stage: 'group' | 'semi' | 'final'
+  out?: 'group' | 'semi' | 'final' | 'winner' // set once the European run is over
+  group: LeagueView
+}
 export interface StoryChoice {
   label: string
   effect: string
@@ -155,6 +164,7 @@ export interface RunView {
   league?: LeagueView // solo: the table
   event?: StoryEvent // solo: a club event waiting for an answer
   pledge?: string // solo: a promise the next match will judge (win | big_win | clean)
+  cup?: CupView // solo: the run in Europe after a top-four finish
 }
 export interface RosterEntry {
   idx: number
@@ -217,9 +227,12 @@ export interface SeasonSummary {
   result: string
   points: number // league points
   position: number // league position, 1-10
+  cup?: string // the European cup of this season, if any
+  cupOut?: string // how it ended
 }
 export interface Me {
   name: string
+  newPlayer?: boolean // has not played a match yet: the tutorial is offered
   hasEmail: boolean
   verified: boolean
   hasSquad: boolean
@@ -290,6 +303,7 @@ export interface GameRecord {
   of?: number
   points?: number
   opponent?: string
+  cup?: string // solo: "<cup>:<outcome>" after a European run
   wins: number
   draws?: number
   losses: number

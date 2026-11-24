@@ -754,7 +754,12 @@ func (s *sim) xg(o *simPlayer, d, press float64) float64 {
 		v *= or1(o.fx.clutchShot)
 	}
 	v *= o.shotBoost * s.mods[def].OppXG
-	v *= s.tac[o.team].Attack * s.tac[def].Concede
+	concede := s.tac[def].Concede
+	if d > 20 && s.tac[o.team].LongShot > 0 {
+		// A packed box does not block shots from distance; it leaves room for them.
+		concede = math.Max(concede, 1) * (1 + s.tac[o.team].Edge*math.Max(0, -s.tac[def].Push))
+	}
+	v *= s.tac[o.team].Attack * concede * (1 + s.tac[o.team].Behind*math.Max(0, s.tac[def].Push))
 	return clamp(v, 0.02, 0.85)
 }
 

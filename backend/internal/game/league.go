@@ -46,19 +46,22 @@ type League struct {
 
 // NewLeague sets up the table. Rival k (1..9, the order you meet them) is
 // stronger the later it comes, with a little form drawn for this season.
-func NewLeague(g *RNG) *League {
+func NewLeague(g *RNG) *League { return newTable(g, clubNames[:]) }
+
+// newTable is a round robin of your club and `rivals`, met in that order.
+func newTable(g *RNG, rivals []string) *League {
 	lg := &League{Teams: []LeagueTeam{{Name: YourClub, You: true}}}
-	for k, name := range clubNames {
+	for k, name := range rivals {
 		lg.Teams = append(lg.Teams, LeagueTeam{Name: name, Strength: float64(k+1) + (g.Float()-0.5)*2.5})
 	}
 	return lg
 }
 
-// fixtures returns the pairs of team indexes meeting on a matchday (1..9).
-// Circle method with your club fixed; teams are relabelled so that on
-// matchday r you meet rival r, the rivals coming in rising strength.
-func fixtures(round int) [][2]int {
-	n := LeagueTeams
+// fixtures returns the pairs of team indexes meeting on a matchday (1..n-1)
+// of a round robin of n teams (n even). Circle method with your club fixed;
+// teams are relabelled so that on matchday r you meet rival r, the rivals
+// coming in rising strength.
+func fixtures(n, round int) [][2]int {
 	// Circle method over positions 0..n-1, position 0 fixed.
 	rot := make([]int, n-1)
 	for i := range rot {
@@ -126,7 +129,7 @@ func (lg *League) record(round int, home, away, hg, ag int) {
 
 // playRound records your match of the matchday and tells the others.
 func (lg *League) playRound(g *RNG, round, gf, ga int) {
-	for _, p := range fixtures(round) {
+	for _, p := range fixtures(len(lg.Teams), round) {
 		if p[0] == 0 {
 			lg.record(round, 0, p[1], gf, ga)
 			continue
@@ -153,6 +156,16 @@ func (lg *League) Table() []LeagueTeam {
 		return a.Name < b.Name
 	})
 	return t
+}
+
+// Mine is your club's row.
+func (lg *League) Mine() LeagueTeam {
+	for _, t := range lg.Teams {
+		if t.You {
+			return t
+		}
+	}
+	return LeagueTeam{}
 }
 
 // Position is your current place in the table (1-based).
@@ -186,10 +199,6 @@ func (lg *League) view() *LeagueView {
 			}
 		}
 	}
-	for _, t := range lg.Teams {
-		if t.You {
-			v.Points = t.Pts
-		}
-	}
+	v.Points = lg.Mine().Pts
 	return v
 }

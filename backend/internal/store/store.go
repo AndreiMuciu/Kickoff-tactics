@@ -110,6 +110,7 @@ type GameRecord struct {
 	Of       int         `json:"of,omitempty" bson:"of,omitempty"`
 	Points   int         `json:"points,omitempty" bson:"points,omitempty"` // ranked: points won or lost; solo: league points
 	Opponent string      `json:"opponent,omitempty" bson:"opponent,omitempty"`
+	Cup      string      `json:"cup,omitempty" bson:"cup,omitempty"` // solo: "<cup>:<outcome>" after a European run
 	Wins     int         `json:"wins" bson:"wins"`
 	Draws    int         `json:"draws,omitempty" bson:"draws,omitempty"`
 	Losses   int         `json:"losses" bson:"losses"`

@@ -11,7 +11,7 @@ func TestLeagueFixtures(t *testing.T) {
 	met := map[[2]int]bool{}
 	for round := 1; round <= MaxRounds; round++ {
 		seen := map[int]bool{}
-		pairs := fixtures(round)
+		pairs := fixtures(LeagueTeams, round)
 		if len(pairs) != LeagueTeams/2 {
 			t.Fatalf("matchday %d has %d matches", round, len(pairs))
 		}
@@ -49,15 +49,27 @@ func TestLeagueSeason(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		played := r.Wins + r.Draws + r.Losses
+		// The record counts European matches too; the table only the league's.
+		var w, d, l int
+		for _, h := range r.History[:min(len(r.History), MaxRounds)] {
+			switch {
+			case h.Won:
+				w++
+			case h.Draw:
+				d++
+			default:
+				l++
+			}
+		}
+		played := w + d + l
 		goals := 0
 		for _, tm := range r.League.Teams {
 			if tm.P != played || tm.W+tm.D+tm.L != tm.P || tm.Pts != 3*tm.W+tm.D {
 				t.Fatalf("season %d: bad row %+v after %d matchdays", k, tm, played)
 			}
 			goals += tm.GF - tm.GA
-			if tm.You && (tm.W != r.Wins || tm.D != r.Draws || tm.L != r.Losses) {
-				t.Fatalf("season %d: your row %+v vs record %d-%d-%d", k, tm, r.Wins, r.Draws, r.Losses)
+			if tm.You && (tm.W != w || tm.D != d || tm.L != l) {
+				t.Fatalf("season %d: your row %+v vs record %d-%d-%d", k, tm, w, d, l)
 			}
 		}
 		if goals != 0 {

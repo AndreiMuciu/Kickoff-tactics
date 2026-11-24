@@ -24,7 +24,7 @@ const (
 	expansionXP     = 8
 	investorMax     = InterestMax + 2
 	sponsorIncome   = 2
-	trustedDiscount = 0.7 // defeats cost this share of the usual patience
+	trustedDiscount = 0.9 // defeats cost this share of the usual patience
 )
 
 var Augments = func() []AugmentDef {
@@ -34,20 +34,20 @@ var Augments = func() []AugmentDef {
 		{ID: "sponsor", Name: "Shirt Sponsor", Kind: "economy", Desc: "+2 💰 after every match."},
 		{ID: "scout", Name: "Scouting Network", Kind: "economy", Desc: "The first new-players refresh of every transfer window is free."},
 		{ID: "expansion", Name: "Stadium Expansion", Kind: "economy", Desc: "+8 stadium experience right now."},
-		{ID: "trusted", Name: "Trusted by the Board", Kind: "economy", Desc: "Defeats cost 30% less of the owner's patience."},
+		{ID: "trusted", Name: "Trusted by the Board", Kind: "economy", Desc: "Defeats cost 10% less of the owner's patience."},
 		{ID: "extraman", Name: "Squad Rotation", Kind: "economy", Desc: "Field one more outfield player than your stadium level allows (ten at most)."},
-		{ID: "fitness", Name: "Fitness Coach", Kind: "team", Desc: "Your players tire 25% more slowly.",
-			team: func(m *Mods) { m.Drain *= 0.75 }},
-		{ID: "crowd", Name: "Home Crowd", Kind: "team", Desc: "Every stat +4%.",
+		{ID: "fitness", Name: "Fitness Coach", Kind: "team", Desc: "Your players tire 40% more slowly.",
+			team: func(m *Mods) { m.Drain *= 0.6 }},
+		{ID: "crowd", Name: "Home Crowd", Kind: "team", Desc: "Every stat +3%.",
 			team: func(m *Mods) {
 				for k := range m.Stat {
-					m.Stat[k] *= 1.04
+					m.Stat[k] *= 1.03
 				}
 			}},
-		{ID: "finishing", Name: "Finishing School", Kind: "team", Desc: "Shooting +12%.",
-			team: func(m *Mods) { m.Stat[SSho] *= 1.12 }},
-		{ID: "backline", Name: "Defensive Coach", Kind: "team", Desc: "Opponent chances -10%.",
-			team: func(m *Mods) { m.OppXG *= 0.9 }},
+		{ID: "finishing", Name: "Finishing School", Kind: "team", Desc: "Shooting +18%.",
+			team: func(m *Mods) { m.Stat[SSho] *= 1.18 }},
+		{ID: "backline", Name: "Defensive Coach", Kind: "team", Desc: "Opponent chances -14%.",
+			team: func(m *Mods) { m.OppXG *= 0.86 }},
 		{ID: "penalties", Name: "Penalty Specialist", Kind: "team", Desc: "Your penalties, in a match or a shootout, score 10% more often.",
 			team: func(m *Mods) { m.PenBonus += 0.10 }},
 	}

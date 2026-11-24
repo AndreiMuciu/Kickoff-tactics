@@ -63,3 +63,65 @@ export const EPILOGUE: Record<string, { title: string; text: string }> = {
     text: "The owner's patience ran out. Somewhere a man in a tracksuit is already being interviewed for your job.",
   },
 }
+
+// ---- Europe ----
+// A top-four finish carries the club, squad and budget into one of three
+// European cups (decided on the server, see cup.go).
+
+export const CUPS: Record<string, { name: string; stars: number; intro: string }> = {
+  crown: {
+    name: 'European Crown',
+    stars: 3,
+    intro: 'Champions get the big stage. The draw, in a hotel ballroom full of chandeliers, puts you among the giants of the continent: clubs with their own museums and stars on every shirt.',
+  },
+  shield: {
+    name: 'European Shield',
+    stars: 2,
+    intro: 'Second or third is good enough for the Shield. Old European names with long histories and loud away ends are waiting, and none of them has heard of you yet.',
+  },
+  plate: {
+    name: 'European Plate',
+    stars: 1,
+    intro: 'Fourth place, and a ticket to the Plate: small clubs from every corner of the continent, long bus rides and away fans who sing in languages you do not speak.',
+  },
+}
+
+export const CUP_RULES =
+  'Same squad, same budget. A group of four, three matchdays; the top two go through to a semi-final and a final, settled on the night, with penalties if level. The owner’s patience does not matter here: lose a knockout tie and the adventure is over.'
+
+export const stars = (n: number) => '★'.repeat(n)
+
+// The stage of European match m (1..5).
+export const cupStage = (m: number) => (m <= 3 ? `Group, matchday ${m} of 3` : m === 4 ? 'Semi-final' : 'Final')
+
+export function cupEnding(id: string, out: string): { title: string; text: string } {
+  const name = CUPS[id]?.name ?? 'Europe'
+  switch (out) {
+    case 'winner':
+      return { title: `🏆 ${name} winners!`, text: 'A European trophy for a club that trained behind a supermarket. The owner has ordered a second statue, bigger than the first.' }
+    case 'final':
+      return { title: `🥈 ${name} runners-up`, text: 'One match from glory. The town threw a parade anyway, and the owner cried through all of it.' }
+    case 'semi':
+      return { title: `${name}: semi-finalists`, text: 'Among the last four on the continent. Nobody laughs at the kit any more.' }
+  }
+  return { title: `${name}: out in the group`, text: 'Europe was a step too far this time, but the club has a passport now, and a taste for away trips.' }
+}
+
+// One line about each European club, in the order you meet them.
+Object.assign(RIVALS, {
+  'Borussia Elmhorst': 'A wall of yellow in the stands and a midfield that never stops running.',
+  'Sporting Valmarés': 'Every one of their academy graduates seems to end up famous. This year’s batch is on the pitch tonight.',
+  'Inter Valdoria': 'Three-time winners of the Crown, and they never let you forget it.',
+  'Athletic Montemayor': 'They defend like their lives depend on it and score from every corner.',
+  'Real Castellmar': 'The most decorated club on the continent. Their bench costs more than your town.',
+  'Union Saint-Aubert': 'A cosy ground, a brass band in the stands and a coach who never sits down.',
+  'Dinamo Kraljevac': 'Fierce at home, where the stands are close enough to touch the corner flag.',
+  'SV Rheinau': 'Organised, patient and always in shape. They will not beat themselves.',
+  'Atlético Montoro': 'They love a scrap. Expect fouls, time-wasting and a late winner.',
+  'Olympique Varenne': 'Silky passers from the south, and the favourites to lift the Shield.',
+  'FK Dravica': 'Part-timers from a river town. Their goalkeeper is also the club’s accountant.',
+  'KS Wisłanka': 'Their supporters travelled two days by train to be here.',
+  'Sporting Alvorada': 'Young, quick and fearless, with a striker the big clubs are already watching.',
+  'Rapid Lindenau': 'A famous name that fell on hard times and wants the old days back.',
+  'Hellas Kalamos': 'Flares, drums and a stadium on a hill above the sea. The final is in their backyard.',
+})

@@ -97,7 +97,9 @@ type Run struct {
 	Match     *MatchState
 	// League is the solo season's table; nil for live games and for seasons
 	// from before the league (those are treated as absent).
-	League   *League `bson:",omitempty"`
+	League *League `bson:",omitempty"`
+	// Cup is the run in Europe after a top-four finish (see cup.go).
+	Cup      *Cup `bson:",omitempty"`
 	History  []HistoryEntry
 	Result   string
 	NextUID  int
@@ -208,9 +210,18 @@ var (
 
 func genOpponent(g *RNG, round int) Opponent {
 	i := round - 1
-	count := soloCount[i]
-	maxCost := soloMaxCost[i]
-	star2 := soloStar2[i]
+	keeper := [MaxRounds]string{AcademyKeeper, AcademyKeeper, AcademyKeeper, "pickford", "onana", "emi", "neuer", "courtois", "donnarumma"}[i]
+	star3 := 0
+	if round >= 7 {
+		star3 = soloStar3
+	}
+	return genTeam(g, clubNames[i], keeper, soloCount[i], soloMaxCost[i], soloStar2[i], star3)
+}
+
+// genTeam builds a club around one style: `count` outfield players costing at
+// most `maxCost`, each with a `star2` % chance of two stars and, if cheap
+// (cost 1-2), a `star3` % chance of three.
+func genTeam(g *RNG, name, keeper string, count, maxCost, star2, star3 int) Opponent {
 	var styles []string
 	for _, sy := range Synergies {
 		if sy.Kind == "style" {
@@ -258,8 +269,7 @@ func genOpponent(g *RNG, round int) Opponent {
 		}
 		return 0, 0
 	}
-	op := Opponent{Name: clubNames[i]}
-	keeper := [MaxRounds]string{AcademyKeeper, AcademyKeeper, AcademyKeeper, "pickford", "onana", "emi", "neuer", "courtois", "donnarumma"}[i]
+	op := Opponent{Name: name}
 	op.Units = append(op.Units, Unit{UID: "ogk", Def: keeper, Stars: 1, Line: GKLine, Lane: 0})
 	for n, id := range ids {
 		d := PlayerByID[id]
@@ -280,7 +290,7 @@ func genOpponent(g *RNG, round int) Opponent {
 		if g.Intn(100) < star2 {
 			stars = 2
 		}
-		if round >= 7 && d.Cost <= 2 && g.Intn(100) < soloStar3 {
+		if star3 > 0 && d.Cost <= 2 && g.Intn(100) < star3 {
 			stars = 3
 		}
 		op.Units = append(op.Units, Unit{UID: fmt.Sprintf("o%d", n), Def: id, Stars: stars, Line: line, Lane: lane})
@@ -650,12 +660,22 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 	half := Simulate(seed, lus, [2][2]string{{"balanced", "balanced"}, {"balanced", "balanced"}}, 1)
 	// The bot's order depends only on the half-time score, never on the player's choice.
 	bot := botTactic(NewRNG(seed^0xA5A5A5A5), half.Score)
-	res := SimulateLeague(seed, lus, [2][2]string{{"balanced", tactic}, {"balanced", bot}})
+	orders := [2][2]string{{"balanced", tactic}, {"balanced", bot}}
+	m := r.cupMatch() // European match number, when in Europe
+	var res *SimResult
+	if r.Cup != nil && m > CupGroupDays {
+		res = Simulate(seed, lus, orders, 2) // a knockout tie: penalties if level
+	} else {
+		res = SimulateLeague(seed, lus, orders)
+	}
 
-	h := HistoryEntry{Round: r.Round, Opponent: r.Opponent.Name, GF: res.Score[0], GA: res.Score[1], Won: res.Winner == 0, Draw: res.Winner < 0, Seed: r.Match.Seed, Commit: r.Match.Commit}
+	h := HistoryEntry{Round: r.Round, Opponent: r.Opponent.Name, GF: res.Score[0], GA: res.Score[1], Pens: len(res.Pens) > 0, Won: res.Winner == 0, Draw: res.Winner < 0, Seed: r.Match.Seed, Commit: r.Match.Commit}
 	extra, note := r.settlePledge(h.Won, h.Draw, h.GF, h.GA)
 	h.Note = note
-	if r.League != nil {
+	switch {
+	case r.Cup != nil && m <= CupGroupDays:
+		r.withRNG(func(g *RNG) { r.Cup.Group.playRound(g, m, h.GF, h.GA) })
+	case r.Cup == nil && r.League != nil:
 		r.withRNG(func(g *RNG) { r.League.playRound(g, r.Round, h.GF, h.GA) })
 	}
 	switch {
@@ -675,19 +695,37 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 			r.Streak = 0
 		}
 		r.Streak--
-		h.Damage = r.lessened(SoloDamage(r.Round, res.Score[1]-res.Score[0])) + extra
-		r.Patience -= h.Damage
+		if r.Cup == nil { // Europe costs no patience: a defeat there only ends the run
+			h.Damage = r.lessened(SoloDamage(r.Round, res.Score[1]-res.Score[0])) + extra
+			r.Patience -= h.Damage
+		}
 	}
 	r.Match = nil
 	r.Discipline(res.SentOff, 0)
+	goOn := false
 	switch {
 	case r.Patience <= 0:
 		r.Patience = 0
 		r.Phase, r.Result = "ended", "sacked"
+	case r.Cup != nil:
+		if r.Cup.Out = r.cupAfter(m, h.Won); r.Cup.Out != "" {
+			r.Phase = "ended"
+		} else {
+			goOn = true
+		}
 	case r.Round >= MaxRounds:
-		r.Phase = "ended"
 		r.Result = r.finalResult()
+		if r.League != nil && cupFor(r.League.Position()) != "" {
+			id := cupFor(r.League.Position())
+			r.withRNG(func(g *RNG) { r.Cup = newCup(g, id) })
+			goOn = true
+		} else {
+			r.Phase = "ended"
+		}
 	default:
+		goOn = true
+	}
+	if goOn {
 		h.Income = r.income(h.Won)
 		r.Budget += h.Income
 		r.gainXP(2)
@@ -695,6 +733,10 @@ func (r *Run) FinishMatch(tactic string) (*SimResult, *HistoryEntry, error) {
 		r.Phase = "shop"
 		r.withRNG(func(g *RNG) {
 			r.nextWindow(g)
+			if r.Cup != nil {
+				r.Opponent = r.cupOpponent(g, r.cupMatch())
+				return
+			}
 			r.Opponent = genOpponent(g, r.Round)
 			r.offerStory(g)
 		})
@@ -756,6 +798,7 @@ type RunView struct {
 	League       *LeagueView    `json:"league,omitempty"` // solo: the table and the matchday's results
 	Event        *StoryEvent    `json:"event,omitempty"`  // solo: the club event waiting for an answer
 	Pledge       string         `json:"pledge,omitempty"` // solo: a promise the next match will judge
+	Cup          *CupView       `json:"cup,omitempty"`    // solo: the run in Europe after the league
 }
 
 func (r *Run) View() RunView {
@@ -769,6 +812,10 @@ func (r *Run) View() RunView {
 		Locked: r.Locked, RerollCost: r.rerollPrice(), InterestMax: r.interestMax(),
 		Augments: r.Augments, AugmentOffer: r.AugmentOffer,
 		LossCost: [2]int{r.lessened(SoloDamage(r.Round, 1)), r.lessened(SoloDamage(r.Round, 3))},
+		Cup:      r.cupView(),
+	}
+	if r.Cup != nil {
+		v.LossCost = [2]int{}
 	}
 	v.Event, v.Pledge, v.Draws = r.storyView(), r.Pledge, r.Draws
 	if r.League != nil {

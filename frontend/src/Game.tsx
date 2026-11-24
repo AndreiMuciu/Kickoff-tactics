@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from './api'
-import type { Action, HalfData, Meta, RunView } from './api'
+import type { Action, CupView, HalfData, HistoryEntry, Meta, RunView } from './api'
 import ClubBoard, { Shootout, StatsTable } from './ClubBoard'
 import { MatchMarket } from './Market'
 import MatchView from './MatchView'
 import type { Photos } from './photos'
-import { EPILOGUE, INTRO, PLEDGES, RIVALS, reaction } from './story'
+import { CUPS, CUP_RULES, EPILOGUE, INTRO, PLEDGES, RIVALS, cupEnding, cupStage, reaction, stars } from './story'
 import { LeagueTable, Results, ord } from './League'
 
 type MatchStage =
@@ -41,6 +41,14 @@ function loadRun(fresh: boolean): Promise<RunView> {
   return loading
 }
 
+// What a European result means, for European match m (1..5).
+function europeLine(r: HistoryEntry, m: number, cup?: CupView): string {
+  if (m > 3) return r.won ? (m === 5 ? '🏆 The trophy is yours!' : 'Through to the final!') : 'Out of Europe. The adventure ends here.'
+  const pts = r.won ? '+3 points in the group.' : r.draw ? '+1 point in the group.' : 'No points in the group.'
+  if (m < 3) return pts
+  return `${pts} ${cup?.out === 'group' ? 'Not enough: the group stage is as far as you go.' : 'You are through to the semi-final!'}`
+}
+
 export default function Game({ meta, photos, fresh, onHome }: Props) {
   const [run, setRun] = useState<RunView | null>(null)
   const [busy, setBusy] = useState(false)
@@ -48,6 +56,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
   const [match, setMatch] = useState<MatchStage | null>(null)
   // The opening chapter is shown once per season, before the first fixture.
   const [introSeen, setIntroSeen] = useState(false)
+  const [cupIntroSeen, setCupIntroSeen] = useState(false)
 
   const fail = useCallback((e: unknown) => {
     setToast(e instanceof ApiError ? e.message : "We can't reach the game right now. Try again in a moment.")
@@ -101,6 +110,7 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
     guard(async () => {
       setMatch(null)
       setIntroSeen(false)
+      setCupIntroSeen(false)
       setRun(await api.newRun())
     })
   const kickoff = () => guard(async () => setMatch({ stage: 'h1', h1: await api.startMatch() }))
@@ -130,24 +140,32 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
           ← Home
         </button>
         <h1>Kickoff Tactics</h1>
-        <div className="chip">
-          Matchday{' '}
-          <b>
-            {Math.min(run.round, run.maxRounds)}/{run.maxRounds}
-          </b>
-        </div>
+        {run.cup ? (
+          <div className={`chip cup cup-${run.cup.id}`} title="Your European run">
+            <span className="cup-stars">{stars(run.cup.stars)}</span> {run.cup.name} · <b>{cupStage(run.cup.match)}</b>
+          </div>
+        ) : (
+          <div className="chip">
+            Matchday{' '}
+            <b>
+              {Math.min(run.round, run.maxRounds)}/{run.maxRounds}
+            </b>
+          </div>
+        )}
         {run.league && (
           <div className="chip" title="League points and position">
             <b>{run.league.points}</b> pts · <b>{run.league.played ? ord(run.league.position) : '–'}</b>
           </div>
         )}
-        <div className="chip patience" title="The owner's patience. At zero you are sacked.">
-          <span>Owner's patience</span>
-          <div className="bar">
-            <i style={{ width: `${(run.patience / run.maxPatience) * 100}%` }} />
+        {!run.cup && (
+          <div className="chip patience" title="The owner's patience. At zero you are sacked.">
+            <span>Owner's patience</span>
+            <div className="bar">
+              <i style={{ width: `${(run.patience / run.maxPatience) * 100}%` }} />
+            </div>
+            <b>{run.patience}</b>
           </div>
-          <b>{run.patience}</b>
-        </div>
+        )}
         <div className="chip">
           Record{' '}
           <b>
@@ -189,28 +207,39 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
             {run.phase === 'shop' && (
               <div className="rival">
                 <h3>
-                  Matchday {run.round}: {run.opponent.name}
+                  {run.cup ? cupStage(run.cup.match) : `Matchday ${run.round}`}: {run.opponent.name}
                 </h3>
                 {RIVALS[run.opponent.name] && <p className="muted">{RIVALS[run.opponent.name]}</p>}
               </div>
             )}
+            {run.cup && (
+              <>
+                <h3>
+                  {stars(run.cup.stars)} {run.cup.name}: group
+                </h3>
+                <LeagueTable league={run.cup.group} compact group />
+              </>
+            )}
             {run.league && (
               <>
-                <h3>League table</h3>
+                <h3>{run.cup ? 'Final league table' : 'League table'}</h3>
                 <LeagueTable league={run.league} compact />
               </>
             )}
             <h3>Your results</h3>
             {run.history.length === 0 && <p className="muted">Your first match awaits.</p>}
             {run.history.map((h) => (
-              <p key={h.round} className={h.won ? 'win' : h.draw ? 'draw' : 'loss'}>
-                {h.round}. {h.opponent}{' '}
-                <b>
-                  {h.gf}–{h.ga}
-                </b>
-                {h.pens ? ' (pens)' : ''}
-                {h.note && <small className="story-note"> · {h.note}</small>}
-              </p>
+              <Fragment key={h.round}>
+                {h.round === run.maxRounds + 1 && <h3>Europe</h3>}
+                <p className={h.won ? 'win' : h.draw ? 'draw' : 'loss'}>
+                  {h.round > run.maxRounds ? `E${h.round - run.maxRounds}` : h.round}. {h.opponent}{' '}
+                  <b>
+                    {h.gf}–{h.ga}
+                  </b>
+                  {h.pens ? ' (pens)' : ''}
+                  {h.note && <small className="story-note"> · {h.note}</small>}
+                </p>
+              </Fragment>
             ))}
           </div>
         }
@@ -263,13 +292,34 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
               </h2>
               <Shootout data={match.h2} />
               <StatsTable data={match.h2} />
-              <p className="owner-says">{reaction(match.h2.result.won, match.h2.result.gf, match.h2.result.ga, match.h2.result.round)}</p>
-              <p>
-                {match.h2.result.won ? '+3 points. The owner is smiling.' : match.h2.result.draw ? '+1 point. No harm to the owner’s patience.' : `No points, and the owner's patience drops by ${match.h2.result.damage}.`}
-                {match.h2.result.income > 0 && ` Budget received: +${match.h2.result.income} 💰.`}
-              </p>
+              {match.h2.result.round > run.maxRounds ? (
+                <p>
+                  {europeLine(match.h2.result, match.h2.result.round - run.maxRounds, match.h2.run.cup)}
+                  {match.h2.result.income > 0 && ` Budget received: +${match.h2.result.income} 💰.`}
+                </p>
+              ) : (
+                <>
+                  <p className="owner-says">{reaction(match.h2.result.won, match.h2.result.gf, match.h2.result.ga, match.h2.result.round)}</p>
+                  <p>
+                    {match.h2.result.won ? '+3 points. The owner is smiling.' : match.h2.result.draw ? '+1 point. No harm to the owner’s patience.' : `No points, and the owner's patience drops by ${match.h2.result.damage}.`}
+                    {match.h2.result.income > 0 && ` Budget received: +${match.h2.result.income} 💰.`}
+                  </p>
+                </>
+              )}
               {match.h2.result.note && <p className="story-note">📰 {match.h2.result.note}</p>}
-              {match.h2.run.league && match.h2.run.league.last.length > 0 && (
+              {match.h2.result.round > run.maxRounds && match.h2.result.round - run.maxRounds <= 3 && match.h2.run.cup && (
+                <div className="matchday">
+                  <div>
+                    <h3>Group: the other match</h3>
+                    <Results results={match.h2.run.cup.group.last} />
+                  </div>
+                  <div>
+                    <h3>Group table</h3>
+                    <LeagueTable league={match.h2.run.cup.group} compact group />
+                  </div>
+                </div>
+              )}
+              {match.h2.result.round <= run.maxRounds && match.h2.run.league && match.h2.run.league.last.length > 0 && (
                 <div className="matchday">
                   <div>
                     <h3>Matchday {match.h2.run.league.played}: other results</h3>
@@ -304,8 +354,21 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
       {run.phase === 'ended' && !match && (
         <div className="overlay">
           <div className="dialog">
-            <h2>{EPILOGUE[run.result]?.title}</h2>
-            <p>{EPILOGUE[run.result]?.text}</p>
+            {run.cup?.out ? (
+              <>
+                <small className="story-kicker">
+                  {stars(run.cup.stars)} {run.cup.name}
+                </small>
+                <h2>{cupEnding(run.cup.id, run.cup.out).title}</h2>
+                <p>{cupEnding(run.cup.id, run.cup.out).text}</p>
+                <p className="muted">League: {EPILOGUE[run.result]?.title}</p>
+              </>
+            ) : (
+              <>
+                <h2>{EPILOGUE[run.result]?.title}</h2>
+                <p>{EPILOGUE[run.result]?.text}</p>
+              </>
+            )}
             <p>
               {run.league && run.result !== 'sacked' && (
                 <>
@@ -335,6 +398,21 @@ export default function Game({ meta, photos, fresh, onHome }: Props) {
             ))}
             <button className="primary big" onClick={() => setIntroSeen(true)}>
               Take the job
+            </button>
+          </div>
+        </div>
+      )}
+      {shopPhase && run.cup && run.round === run.maxRounds + 1 && !cupIntroSeen && (
+        <div className="overlay story-overlay">
+          <div className={`dialog story cup-${run.cup.id}`}>
+            <small className="story-kicker">
+              Chapter 2 · <span className="cup-stars">{stars(run.cup.stars)}</span>
+            </small>
+            <h2>{run.cup.name}</h2>
+            <p>{CUPS[run.cup.id]?.intro}</p>
+            <p>{CUP_RULES}</p>
+            <button className="primary big" onClick={() => setCupIntroSeen(true)}>
+              To Europe ✈
             </button>
           </div>
         </div>

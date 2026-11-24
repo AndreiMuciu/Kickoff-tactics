@@ -72,7 +72,7 @@ func TestAugmentEffects(t *testing.T) {
 	}
 	// Trusted by the Board: defeats cost less, never nothing.
 	r.Augments = append(r.Augments, "trusted")
-	if got := r.LossFor(20); got != 14 {
+	if got := r.LossFor(20); got != 18 {
 		t.Fatalf("trusted: 20 became %d", got)
 	}
 	if r.LossFor(1) != 1 {

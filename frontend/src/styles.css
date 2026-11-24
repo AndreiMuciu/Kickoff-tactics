@@ -585,3 +585,20 @@ button.danger:disabled { opacity: .5; cursor: not-allowed; }
 .ach-pips i.on.t3 { background: var(--gold); }
 .ach-pips i.on.t4 { background: #67e8f9; }
 .ach-pips i.on.t5 { background: #a78bfa; }
+
+/* Tutorial */
+.tutorial-overlay { z-index: 40; }
+.dialog.tutorial { gap: 12px; min-height: 380px; }
+.tutorial-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.tutorial-icon { font-size: 46px; line-height: 1; }
+.tutorial-dots { display: flex; justify-content: center; gap: 8px; margin-top: auto; }
+.tutorial-dots button { width: 10px; height: 10px; min-width: 0; padding: 0; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .22); cursor: pointer; }
+.tutorial-dots button.on { background: var(--good); }
+
+/* Europe */
+.cup-stars { color: var(--gold); letter-spacing: 1px; }
+.chip.cup { border-color: rgba(250, 204, 21, .45); background: linear-gradient(90deg, rgba(30, 58, 138, .55), rgba(15, 23, 42, .6)); }
+.chip.cup-crown { border-color: rgba(250, 204, 21, .8); }
+.dialog.story.cup-crown { border-color: rgba(250, 204, 21, .6); background: linear-gradient(160deg, rgba(30, 41, 90, .98), rgba(12, 18, 40, .98)); }
+.dialog.story.cup-shield { border-color: rgba(251, 146, 60, .55); background: linear-gradient(160deg, rgba(56, 30, 20, .98), rgba(20, 14, 12, .98)); }
+.dialog.story.cup-plate { border-color: rgba(45, 212, 191, .5); background: linear-gradient(160deg, rgba(14, 50, 52, .98), rgba(8, 22, 26, .98)); }

@@ -255,7 +255,7 @@ func TestBalanceKeepers(t *testing.T) {
 // What a price step and a star are worth.
 func TestBalanceCostAndStars(t *testing.T) {
 	skipUnlessReport(t)
-	const n = 3000
+	const n = 1500
 	for cost := 2; cost <= 5; cost++ {
 		hi := outfieldPool(func(p PlayerDef) bool { return p.Cost == cost })
 		lo := outfieldPool(func(p PlayerDef) bool { return p.Cost == cost-1 })
@@ -314,9 +314,10 @@ func TestBalanceCostAndStars(t *testing.T) {
 // buys the dearest player he can afford, completes merges, levels up when rich.
 func TestBalanceSoloSeason(t *testing.T) {
 	skipUnlessReport(t)
-	results, reached, won := map[string]int{}, [MaxRounds + 1]int{}, [MaxRounds + 1]int{}
+	results, reached, won := map[string]int{}, [MaxRounds + CupMatches + 1]int{}, [MaxRounds + CupMatches + 1]int{}
+	cups := map[string]map[string]int{} // cup -> outcome -> seasons
 	positions, finished, champPts, myPts := [LeagueTeams + 1]int{}, 0, 0, 0
-	const n = 400
+	const n = 1500
 	for k := 0; k < n; k++ {
 		r, err := NewRun(fmt.Sprintf("solo-%d", k))
 		if err != nil {
@@ -339,6 +340,12 @@ func TestBalanceSoloSeason(t *testing.T) {
 			}
 		}
 		results[r.Result]++
+		if r.Cup != nil {
+			if cups[r.Cup.ID] == nil {
+				cups[r.Cup.ID] = map[string]int{}
+			}
+			cups[r.Cup.ID][r.Cup.Out]++
+		}
 		if r.Result != "sacked" {
 			finished++
 			positions[r.League.Position()]++
@@ -349,10 +356,119 @@ func TestBalanceSoloSeason(t *testing.T) {
 	t.Logf("results of %d seasons: %v", n, results)
 	t.Logf("seasons that reached each fixture: %v", reached[1:])
 	rates := make([]string, 0, MaxRounds)
-	for i := 1; i <= MaxRounds; i++ {
+	for i := 1; i <= MaxRounds+CupMatches; i++ {
 		rates = append(rates, fmt.Sprintf("%d%%", 100*won[i]/max(reached[i], 1)))
 	}
 	t.Logf("win rate per fixture: %v", rates)
 	t.Logf("final positions of finished seasons (1..10): %v", positions[1:])
 	t.Logf("average champion points: %.1f, your average points: %.1f", float64(champPts)/float64(max(finished, 1)), float64(myPts)/float64(max(finished, 1)))
+	for _, c := range Cups {
+		o := cups[c.ID]
+		n := o["group"] + o["semi"] + o["final"] + o["winner"]
+		t.Logf("%s: %d entries, out in the group %d%%, lost the semi %d%%, lost the final %d%%, won %d%%", c.Name, n,
+			100*o["group"]/max(n, 1), 100*o["semi"]/max(n, 1), 100*o["final"]/max(n, 1), 100*o["winner"]/max(n, 1))
+	}
+}
+
+// What each augment is worth in a lobby of eight bot clubs: every club is
+// handed a different augment at the first augment round, later offers are
+// taken at random, and the average final place is reported per augment
+// (4.5 is neutral, lower is better). Bots ignore styles, so crests measure
+// only the extra player's worth in whatever style the bot happened to sign.
+func TestBalanceAugments(t *testing.T) {
+	skipUnlessReport(t)
+	const lobbies = 900
+	sum, cnt := map[string]float64{}, map[string]int{}
+	type res struct{ place map[string]int }
+	out := make(chan res)
+	for k := 0; k < lobbies; k++ {
+		go func(k int) {
+			g := NewRNG(uint64(k)*7919 + 3)
+			ids := make([]string, len(Augments))
+			for i, a := range Augments {
+				ids[i] = a.ID
+			}
+			for i := len(ids) - 1; i > 0; i-- {
+				j := g.Intn(i + 1)
+				ids[i], ids[j] = ids[j], ids[i]
+			}
+			clubs := make([]*Run, 8)
+			for i := range clubs {
+				clubs[i], _ = NewVersusRun(fmt.Sprintf("l%d-%d", k, i))
+			}
+			alive := []int{0, 1, 2, 3, 4, 5, 6, 7}
+			placed := map[string]int{}
+			for round := 1; len(alive) > 1 && round < 60; round++ {
+				for _, i := range alive {
+					c := clubs[i]
+					if len(c.AugmentOffer) > 0 {
+						if c.Round == AugmentRounds[0] {
+							c.AugmentOffer[0] = ids[i]
+							_ = c.chooseAugment(0)
+						} else {
+							_ = c.chooseAugment(g.Intn(len(c.AugmentOffer)))
+						}
+					}
+					c.BotManage(g)
+					c.AutoField()
+				}
+				order := append([]int(nil), alive...)
+				for i := len(order) - 1; i > 0; i-- {
+					j := g.Intn(i + 1)
+					order[i], order[j] = order[j], order[i]
+				}
+				if len(order)%2 == 1 {
+					order = append(order, order[0]) // a ghost: the first club's line-up again
+				}
+				for p := 0; p < len(order); p += 2 {
+					a, b := clubs[order[p]], clubs[order[p+1]]
+					seed, _, _ := randomSeed()
+					hex := fmt.Sprintf("%016x%016x", seed, uint64(k*131+round))
+					la, _ := a.Squad("A")
+					lb, _ := b.Squad("B")
+					lus := [2]Lineup{la, lb}
+					r, _ := SimulateSeed(hex, lus, [2]string{BotOrder(hex, lus, 0), BotOrder(hex, lus, 1)}, 2)
+					a.SettleVersus(a.Round, "B", r.Score[0], r.Score[1], r.Winner == 0, len(r.Pens) > 0, r.SentOff, 0, round)
+					if p+1 < len(order)-1 || len(alive)%2 == 0 {
+						b.SettleVersus(b.Round, "A", r.Score[1], r.Score[0], r.Winner == 1, len(r.Pens) > 0, r.SentOff, 1, round)
+					}
+				}
+				var still []int
+				for _, i := range alive {
+					if clubs[i].Patience > 0 {
+						still = append(still, i)
+					}
+				}
+				// Clubs out in the same round share the places they cover.
+				for _, i := range alive {
+					if clubs[i].Patience <= 0 {
+						placed[ids[i]] = len(still) + 1
+					}
+				}
+				alive = still
+			}
+			for _, i := range alive {
+				placed[ids[i]] = 1
+			}
+			out <- res{placed}
+		}(k)
+	}
+	for k := 0; k < lobbies; k++ {
+		for id, p := range (<-out).place {
+			sum[id] += float64(p)
+			cnt[id]++
+		}
+	}
+	type row struct {
+		id  string
+		avg float64
+	}
+	var rows []row
+	for id := range sum {
+		rows = append(rows, row{id, sum[id] / float64(cnt[id])})
+	}
+	sort.Slice(rows, func(a, b int) bool { return rows[a].avg < rows[b].avg })
+	for _, r := range rows {
+		t.Logf("%-22s average place %.2f (%d lobbies)", r.id, r.avg, cnt[r.id])
+	}
 }

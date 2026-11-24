@@ -3,9 +3,12 @@ import type { LeagueResult, LeagueView } from './api'
 const ord = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`
 export { ord }
 
-// The solo league table: champion, European places and relegation marked.
-export function LeagueTable({ league, compact }: { league: LeagueView; compact?: boolean }) {
-  const zone = (pos: number) => (pos === 1 ? 'champ' : pos <= league.europe ? 'europe' : pos >= league.relegate ? 'drop' : '')
+// The solo league table: champion, European places and relegation marked. A
+// European group (`group`) marks only the places that go through.
+export function LeagueTable({ league, compact, group }: { league: LeagueView; compact?: boolean; group?: boolean }) {
+  const zone = (pos: number) =>
+    group ? (pos <= league.europe ? 'europe' : '') : pos === 1 ? 'champ' : pos <= league.europe ? 'europe' : pos >= league.relegate ? 'drop' : ''
+
   return (
     <div className={`league ${compact ? 'compact' : ''}`}>
       <table>
@@ -46,9 +49,15 @@ export function LeagueTable({ league, compact }: { league: LeagueView; compact?:
           ))}
         </tbody>
       </table>
-      <p className="league-key">
-        <i className="champ" /> Champions <i className="europe" /> Europe (2–{league.europe}) <i className="drop" /> Relegation ({league.relegate}–{league.table.length})
-      </p>
+      {group ? (
+        <p className="league-key">
+          <i className="europe" /> Top {league.europe} go through to the semi-final
+        </p>
+      ) : (
+        <p className="league-key">
+          <i className="champ" /> Champions: European Crown <i className="europe" /> 2–3: Shield, {league.europe}: Plate <i className="drop" /> Relegation ({league.relegate}–{league.table.length})
+        </p>
+      )}
     </div>
   )
 }

@@ -449,6 +449,8 @@ type Tactic struct {
 	PassBias   float64 `json:"-"`
 	Forward    float64 `json:"-"` // extra weight on passing forward
 	Counter    float64 `json:"-"` // seconds the forwards sprint after the ball is won
+	Behind     float64 `json:"-"` // better chances per unit of the opponent's Push: balls over a high line
+	Edge       float64 `json:"-"` // better long shots per unit the opponent sits deep: space at the edge of the box
 
 	// The goalkeeper's part in the order.
 	GKHold      float64 `json:"-"` // seconds he keeps the ball before releasing it
@@ -475,10 +477,10 @@ var Tactics = []Tactic{
 		Attack: 0.6, Concede: 1.0, ShootBias: -0.14, Pressers: 2, Drain: 0.9, DefMul: 1, PassAcc: 0.12, MomentMul: 1.35, PressSpeed: 1, PassBias: 0.18, GKHold: 1.3, GKIntercept: 0},
 	{ID: "counter", Name: "Counter-Attack", Desc: "Sit deep with one man pressing. When you win the ball, midfield and attack sprint for a second and a half and the next chances are better. You will see little of the ball.", Keeper: "Launches it long the moment he has it.",
 		Attack: 1.0, Concede: 1.0, Push: -0.3, Pressers: 1, Drain: 0.95, DefMul: 1.05, MomentMul: 1, PressSpeed: 1, Forward: 0.05, Counter: 1.4, GKHold: 0.5, GKIntercept: 0.12, GKLong: true},
-	{ID: "long_balls", Name: "Long Balls", Desc: "Skip the midfield: every pass looks forward. You reach their box faster, but passes are 8% less accurate.", Keeper: "Goal kicks go straight to the most advanced free teammate.",
-		Attack: 1.28, Concede: 1.05, Push: 0.1, Pressers: 2, Drain: 1, DefMul: 1, PassAcc: -0.08, MomentMul: 1, PressSpeed: 1, Forward: 0.08, GKHold: 0.8, GKIntercept: 0.12, GKLong: true},
-	{ID: "shoot_sight", Name: "Shoot on Sight", Desc: "Let fly from anywhere: many more shots and long shots are 70% better, but shooting early wastes good positions.", Keeper: "Normal distribution.",
-		Attack: 1.15, Concede: 1, ShootBias: 0.2, LongShot: 1.7, Pressers: 2, Drain: 1, DefMul: 1, MomentMul: 1, PressSpeed: 1, GKHold: 1, GKIntercept: 0.08},
+	{ID: "long_balls", Name: "Long Balls", Desc: "Skip the midfield: every pass looks forward and is 8% less accurate. The answer to a team that pushes up (All-Out Attack, Full Press): balls over their line give you much better chances.", Keeper: "Goal kicks go straight to the most advanced free teammate.",
+		Attack: 1.28, Concede: 1.05, Push: 0.1, Pressers: 2, Drain: 1, DefMul: 1, PassAcc: -0.08, MomentMul: 1, PressSpeed: 1, Forward: 0.08, Behind: 2.0, GKHold: 0.8, GKIntercept: 0.12, GKLong: true},
+	{ID: "shoot_sight", Name: "Shoot on Sight", Desc: "Let fly from anywhere: many more shots, long shots 70% better, but shooting early wastes good positions. The answer to a team that sits deep (Park the Bus, Counter-Attack): a packed box leaves room for shots from distance.", Keeper: "Normal distribution.",
+		Attack: 1.15, Concede: 1, ShootBias: 0.2, LongShot: 1.7, Edge: 1.5, Pressers: 2, Drain: 1, DefMul: 1, MomentMul: 1, PressSpeed: 1, GKHold: 1, GKIntercept: 0.08},
 }
 
 var TacticByID = func() map[string]Tactic {

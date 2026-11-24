@@ -4,7 +4,9 @@ import type { ChatMessage, FriendList, Me, Ranking, RankedView } from './api'
 import { watch } from './live'
 import { QUOTES } from './quotes'
 import Profile from './Profile'
+import Tutorial from './Tutorial'
 import { ord } from './League'
+import { CUPS, cupEnding } from './story'
 
 const RESULT: Record<string, string> = { champion: '🏆 Champions', europe: '🎟 European place', survived: '😮‍💨 Mid-table', relegated: '⬇️ Relegated', sacked: '📦 Sacked' }
 
@@ -120,6 +122,23 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
   }
   const s = me.season
   const inSeason = s && s.phase !== 'ended'
+  // The tutorial opens by itself once, for a manager who has not played yet.
+  const tutorialKey = `autofootball-tutorial-${me.name}`
+  const [tutorial, setTutorial] = useState(() => {
+    try {
+      return !!me.newPlayer && !localStorage.getItem(tutorialKey)
+    } catch {
+      return !!me.newPlayer
+    }
+  })
+  const closeTutorial = useCallback(() => {
+    setTutorial(false)
+    try {
+      localStorage.setItem(tutorialKey, '1')
+    } catch {
+      // private mode: it may open again next time, and can be skipped again
+    }
+  }, [tutorialKey])
 
   return (
     <div className="app">
@@ -156,19 +175,24 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
           }}
         />
       )}
+      {tutorial && <Tutorial onClose={closeTutorial} />}
       {friendProfile && <Profile name={friendProfile} onClose={() => setFriendProfile(null)} onChanged={() => {}} />}
       <main className="home">
         <section className="panel hero">
           <h2>{inSeason ? 'Your season is waiting' : 'Start a season'}</h2>
           {s ? (
             <p>
-              {s.phase === 'ended' ? `Last season: ${RESULT[s.result] ?? 'finished'}. ` : `Matchday ${s.round} of ${s.maxRounds}. `}
+              {s.phase === 'ended'
+                ? `Last season: ${RESULT[s.result] ?? 'finished'}${s.cup && s.cupOut ? `, then ${cupEnding(s.cup, s.cupOut).title}` : ''}. `
+                : s.cup
+                  ? `In Europe: ${CUPS[s.cup]?.name ?? 'a European cup'}. `
+                  : `Matchday ${s.round} of ${s.maxRounds}. `}
               {s.round > 1 || s.phase === 'ended' ? `${s.points} pts, ${ord(s.position)} in the league. ` : ''}
-              Record {s.wins}W {s.draws ?? 0}D {s.losses}L{inSeason ? `, owner's patience ${s.patience}.` : '.'}
+              Record {s.wins}W {s.draws ?? 0}D {s.losses}L{inSeason && !s.cup ? `, owner's patience ${s.patience}.` : '.'}
               {s.phase === 'halftime' && ' You are at half-time.'}
             </p>
           ) : (
-            <p>Eight fixtures against clubs that get stronger every week. Your first stadium fits one outfield player and a keeper.</p>
+            <p>A league of ten clubs over nine matchdays, and Europe for the top four. Your first stadium fits one outfield player and a keeper.</p>
           )}
           <div className="hero-actions">
             {inSeason && (
@@ -178,6 +202,9 @@ export default function Home({ me, ranked, onRanked, onParty, onPlay, onLive, on
             )}
             <button className={inSeason ? 'big' : 'primary big'} title={inSeason ? 'Abandon this season and start a new one' : undefined} onClick={() => onPlay(true)}>
               {inSeason ? 'Abandon & start new' : 'New season ▶'}
+            </button>
+            <button className="big" onClick={() => setTutorial(true)} title="The rules in eight short steps">
+              📖 How to play
             </button>
           </div>
           <ul className="how">

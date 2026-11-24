@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from './api'
 import type { AchievementView, GameRecord, HistoryPage, ProfileView } from './api'
+import { cupEnding } from './story'
 
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '–')
 const day = (ms: number) =>
@@ -29,7 +30,7 @@ function outcome(g: GameRecord): { text: string; good: boolean } {
   switch (g.mode) {
     case 'solo':
       return {
-        text: `${SOLO[g.result] ?? g.result}${g.place && g.result !== 'sacked' ? ` · ${g.place} of ${g.of}, ${g.points ?? 0} pts` : ''}`,
+        text: `${SOLO[g.result] ?? g.result}${g.place && g.result !== 'sacked' ? ` · ${g.place} of ${g.of}, ${g.points ?? 0} pts` : ''}${g.cup ? ` · ${cupEnding(...(g.cup.split(':') as [string, string])).title}` : ''}`,
         good: g.result !== 'sacked' && g.result !== 'relegated',
       }
     case 'series':
