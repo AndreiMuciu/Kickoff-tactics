@@ -42,6 +42,8 @@ export interface Meta {
   storage: string
   augments?: AugmentDef[]
   augmentRounds?: number[]
+  items?: ItemDef[]
+  itemEvery?: number // an item arrives every this many rounds
   penaltyPrize?: number
   penaltyRounds?: number
 }
@@ -58,6 +60,14 @@ export interface Unit {
   line: number
   lane: number
   ban?: number // matches of suspension left
+  item?: string // the item he wears
+}
+export interface ItemDef {
+  id: string
+  icon: string
+  name: string
+  desc: string
+  keeper?: boolean // goalkeepers only
 }
 export interface SynergyView {
   id: string
@@ -180,6 +190,7 @@ export interface RunView {
   interestMax?: number
   augments?: string[]
   augmentOffer?: string[]
+  items?: string[] // the kit bag: items not handed to a player yet
   lossCost?: [number, number] // patience a defeat in the next match costs: by one goal, by three or more
   draws: number
   league?: LeagueView // solo: the table
@@ -236,6 +247,8 @@ export type Action =
   | { type: 'lock' }
   | { type: 'augment'; slot: number }
   | { type: 'story'; slot: number }
+  | { type: 'equip'; slot: number; uid: string }
+  | { type: 'unequip'; uid: string }
 
 export interface SeasonSummary {
   phase: 'shop' | 'halftime' | 'ended'

@@ -16,8 +16,9 @@ const (
 type LineupUnit struct {
 	DefID string
 	Stars int
-	Line  int // 0 defence, 1 midfield, 2 attack
-	Lane  int // 0..4 across the pitch
+	Line  int    // 0 defence, 1 midfield, 2 attack
+	Lane  int    // 0..4 across the pitch
+	Item  string `bson:",omitempty"` // the item he wears, if any
 }
 
 type Lineup struct {
@@ -257,6 +258,7 @@ func newSim(seed uint64, lineups [2]Lineup, without [2]string) *sim {
 		}
 		gk := &simPlayer{idx: len(s.pl), team: t, gk: true, role: "gk", fx: fxByID[gd.ID], ref: float64(gd.Ref + (gs-1)*8), stam: 1, shotBoost: 1}
 		gk.base = [7]float64{50, 20, 55, 30, 40, 60, 99}
+		applyItem(gk, lu.GK.Item)
 		gk.home = vec{adv(t, 4), PitchW / 2}
 		s.gk[t] = gk.idx
 		s.pl = append(s.pl, gk)
@@ -272,6 +274,7 @@ func newSim(seed uint64, lineups [2]Lineup, without [2]string) *sim {
 			for k := 0; k < 7; k++ {
 				p.base[k] = float64(d.Stats[k]) * StarMul[u.Stars]
 			}
+			applyItem(p, u.Item)
 			y := 6 + 12*float64(u.Lane)
 			if t == 1 {
 				y = PitchW - y

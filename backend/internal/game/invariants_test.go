@@ -23,7 +23,7 @@ func TestMatchInvariants(t *testing.T) {
 					continue
 				}
 				used[c], taken[id] = true, true
-				lu.Units = append(lu.Units, LineupUnit{id, 1 + g.Intn(3), c[0], c[1]})
+				lu.Units = append(lu.Units, LineupUnit{id, 1 + g.Intn(3), c[0], c[1], ""})
 			}
 			return lu
 		}

@@ -45,6 +45,7 @@ type Unit struct {
 	Line  int    `json:"line"` // -1 on the bench
 	Lane  int    `json:"lane"`
 	Ban   int    `json:"ban"` // matches of suspension left after a red card
+	Item  string `json:"item,omitempty" bson:",omitempty"`
 }
 
 type Opponent struct {
@@ -110,6 +111,7 @@ type Run struct {
 	FreeReroll   bool
 	Augments     []string
 	AugmentOffer []string // the augments to choose from in this window, if any
+	Items        []string `bson:",omitempty"` // the kit bag: items not handed to a player yet
 	// Solo story: the club event waiting for an answer, the events already
 	// seen this season, the answers given, and a promise still to be judged.
 	Event       string   `bson:",omitempty"`
@@ -376,6 +378,14 @@ func (r *Run) merge() {
 			}
 			for _, i := range idx {
 				r.Units[keep].Ban = max(r.Units[keep].Ban, r.Units[i].Ban)
+				// The merged player keeps one item; the others go back to the bag.
+				if it := r.Units[i].Item; it != "" && i != keep {
+					if r.Units[keep].Item == "" {
+						r.Units[keep].Item = it
+					} else {
+						r.Items = append(r.Items, it)
+					}
+				}
 			}
 			r.Units[keep].Stars++
 			var out []Unit
@@ -466,6 +476,9 @@ func (r *Run) Apply(a Action) error {
 			return rule("You always need a goalkeeper. Swap another keeper into goal before selling this one.")
 		}
 		r.Budget += sellValue(*u)
+		if u.Item != "" {
+			r.Items = append(r.Items, u.Item)
+		}
 		var out []Unit
 		for _, x := range r.Units {
 			if x.UID != a.UID {
@@ -538,6 +551,10 @@ func (r *Run) Apply(a Action) error {
 		r.Locked = !r.Locked
 	case "augment":
 		return r.chooseAugment(a.Slot)
+	case "equip":
+		return r.equip(a.Slot, a.UID)
+	case "unequip":
+		return r.unequip(a.UID)
 	case "story":
 		return r.chooseStory(a.Slot)
 	case "levelup":
@@ -560,9 +577,9 @@ func lineupOf(name string, units []Unit) Lineup {
 	for _, u := range units {
 		switch {
 		case u.Line == GKLine:
-			lu.GK = LineupUnit{DefID: u.Def, Stars: u.Stars}
+			lu.GK = LineupUnit{DefID: u.Def, Stars: u.Stars, Item: u.Item}
 		case u.Line >= 0 && u.Ban == 0:
-			lu.Units = append(lu.Units, LineupUnit{DefID: u.Def, Stars: u.Stars, Line: u.Line, Lane: u.Lane})
+			lu.Units = append(lu.Units, LineupUnit{DefID: u.Def, Stars: u.Stars, Line: u.Line, Lane: u.Lane, Item: u.Item})
 		}
 	}
 	return lu
@@ -801,6 +818,7 @@ type RunView struct {
 	InterestMax  int            `json:"interestMax"`
 	Augments     []string       `json:"augments"`
 	AugmentOffer []string       `json:"augmentOffer"`
+	Items        []string       `json:"items"`    // the kit bag
 	LossCost     [2]int         `json:"lossCost"` // patience a defeat in the next match costs: by one goal, by three or more
 	Draws        int            `json:"draws"`
 	League       *LeagueView    `json:"league,omitempty"` // solo: the table and the matchday's results
@@ -818,7 +836,7 @@ func (r *Run) View() RunView {
 		Shop: r.Shop, ShopOdds: shopOdds[r.Level], Units: r.Units, Synergies: syn, Opponent: r.Opponent, OppSynergies: osyn,
 		Streak: r.Streak, Wins: r.Wins, Losses: r.Losses, History: r.History, Result: r.Result,
 		Locked: r.Locked, RerollCost: r.rerollPrice(), InterestMax: r.interestMax(),
-		Augments: r.Augments, AugmentOffer: r.AugmentOffer,
+		Augments: r.Augments, AugmentOffer: r.AugmentOffer, Items: r.Items,
 		LossCost: [2]int{r.lessened(SoloDamage(r.Round, 1)), r.lessened(SoloDamage(r.Round, 3))},
 		Cup:      r.cupView(),
 	}
@@ -834,6 +852,9 @@ func (r *Run) View() RunView {
 	}
 	if v.AugmentOffer == nil {
 		v.AugmentOffer = []string{}
+	}
+	if v.Items == nil {
+		v.Items = []string{}
 	}
 	if v.Units == nil {
 		v.Units = []Unit{}
@@ -1117,10 +1138,10 @@ func (r *Run) SettleVersus(round int, opponent string, gf, ga int, won, pens boo
 func LineupUnits(lu Lineup) []Unit {
 	out := []Unit{}
 	if lu.GK.DefID != "" {
-		out = append(out, Unit{UID: "ogk", Def: lu.GK.DefID, Stars: lu.GK.Stars, Line: GKLine})
+		out = append(out, Unit{UID: "ogk", Def: lu.GK.DefID, Stars: lu.GK.Stars, Line: GKLine, Item: lu.GK.Item})
 	}
 	for i, u := range lu.Units {
-		out = append(out, Unit{UID: fmt.Sprintf("o%d", i), Def: u.DefID, Stars: u.Stars, Line: u.Line, Lane: u.Lane})
+		out = append(out, Unit{UID: fmt.Sprintf("o%d", i), Def: u.DefID, Stars: u.Stars, Line: u.Line, Lane: u.Lane, Item: u.Item})
 	}
 	return out
 }
@@ -1282,6 +1303,7 @@ func (r *Run) BotManage(g *RNG) {
 			bench++
 		}
 	}
+	r.botItems(value)
 	// A bench can hold only so many: let the weakest go.
 	for bench > BenchSize {
 		worst := -1
@@ -1294,6 +1316,9 @@ func (r *Run) BotManage(g *RNG) {
 			break
 		}
 		r.Budget += sellValue(r.Units[worst])
+		if it := r.Units[worst].Item; it != "" {
+			r.Items = append(r.Items, it)
+		}
 		r.Units = append(r.Units[:worst], r.Units[worst+1:]...)
 		bench = 0
 		for i := range r.Units {

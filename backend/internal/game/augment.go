@@ -208,6 +208,7 @@ func (r *Run) nextWindow(g *RNG) {
 	}
 	r.FreeReroll = r.has("scout")
 	r.offerAugments(g)
+	r.dropItem(g)
 }
 
 // LossFor is the patience a defeat of the given base cost takes from this club.

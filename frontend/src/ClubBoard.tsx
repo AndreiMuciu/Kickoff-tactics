@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { Action, MatchData, Meta, PlayerDef, RunView, SynergyView, Unit } from './api'
+import type { Action, ItemDef, MatchData, Meta, PlayerDef, RunView, SynergyView, Unit } from './api'
 import { Face } from './Face'
 import { AugmentList, AugmentPicker, Market } from './Market'
 import { planStatus, usePlan } from './plan'
@@ -70,7 +70,7 @@ const LINE_HINTS = [
 ]
 // PlayerCard is the piece on the pitch and the bench: the player's face fills
 // the card, with name, position and stars over it.
-function PlayerCard({ unit, def, photo, selected, enemy }: { unit: Unit; def: PlayerDef; photo?: string; selected?: boolean; enemy?: boolean }) {
+function PlayerCard({ unit, def, photo, selected, enemy, item }: { unit: Unit; def: PlayerDef; photo?: string; selected?: boolean; enemy?: boolean; item?: ItemDef }) {
   return (
     <div
       className={`pcard cost${def.cost} ${selected ? 'selected' : ''} ${enemy ? 'enemy' : ''} ${unit.ban ? 'banned' : ''}`}
@@ -78,10 +78,45 @@ function PlayerCard({ unit, def, photo, selected, enemy }: { unit: Unit; def: Pl
     >
       <Face def={def} photo={photo} aspect={0.8} tight={2.1} />
       {!!unit.ban && <span className="pcard-ban">🟥 {unit.ban}</span>}
+      {item && (
+        <span className={`pcard-item ${unit.ban ? 'low' : ''}`} title={`${item.name}: ${item.desc}`}>
+          {item.icon}
+        </span>
+      )}
       <span className="pcard-stars">{'★'.repeat(unit.stars)}</span>
       <span className="pcard-name">
         {ROLE[def.role].icon} {shortName(def.name)}
       </span>
+    </div>
+  )
+}
+
+// The kit bag: items not handed to a player yet. Pick one, then click a
+// player (or drag it onto him) to hand it over.
+function KitBag({ meta, items, picked, canAct, onPick }: { meta: Meta; items: string[]; picked: number | null; canAct: boolean; onPick: (i: number | null) => void }) {
+  const defs = Object.fromEntries((meta.items ?? []).map((it) => [it.id, it]))
+  return (
+    <div className="panel kitbag">
+      <h3>Kit bag</h3>
+      {items.length === 0 && <p className="muted">Empty. A new item arrives every {meta.itemEvery ?? 3} rounds.</p>}
+      {items.map((id, i) => (
+        <button
+          key={i}
+          className={`kit-item ${picked === i ? 'on' : ''}`}
+          disabled={!canAct}
+          draggable={canAct}
+          onDragStart={(e) => e.dataTransfer.setData('text/plain', `item:${i}`)}
+          onClick={() => onPick(picked === i ? null : i)}
+          title={defs[id]?.desc}
+        >
+          <b>
+            {defs[id]?.icon} {defs[id]?.name ?? id}
+          </b>
+          <small>{defs[id]?.desc}</small>
+        </button>
+      ))}
+      {picked !== null && <p className="muted small">Now click the player who should wear it.</p>}
+      {items.length > 0 && picked === null && <p className="muted small">One item per player. Selling a player gives his item back.</p>}
     </div>
   )
 }
@@ -235,7 +270,7 @@ export function Shootout({ data }: { data: MatchData }) {
 // series both provide it.
 export type BoardView = Pick<
   RunView,
-  'budget' | 'level' | 'maxLevel' | 'xp' | 'xpNeed' | 'slots' | 'shop' | 'shopOdds' | 'units' | 'synergies' | 'opponent' | 'oppSynergies' | 'locked' | 'rerollCost' | 'interestMax' | 'augments' | 'augmentOffer' | 'lossCost'
+  'budget' | 'level' | 'maxLevel' | 'xp' | 'xpNeed' | 'slots' | 'shop' | 'shopOdds' | 'units' | 'synergies' | 'opponent' | 'oppSynergies' | 'locked' | 'rerollCost' | 'interestMax' | 'augments' | 'augmentOffer' | 'lossCost' | 'items'
 >
 
 interface BoardProps {
@@ -256,6 +291,9 @@ interface BoardProps {
 // only reports intents through onAction; the server decides what happens.
 export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, oppTitle, primary, side, oppAugments, windowLeft }: BoardProps) {
   const [selected, setSelected] = useState<string | null>(null)
+  const [picked, setPicked] = useState<number | null>(null) // an item from the kit bag, about to be handed over
+  const items = useMemo(() => Object.fromEntries((meta.items ?? []).map((it) => [it.id, it])), [meta])
+  const itemOf = (u: Unit) => (u.item ? items[u.item] : undefined)
   const [hover, setHover] = useState<{ def: string; stars: number } | null>(null)
   const [planning, setPlanning] = useState(false)
   const plan = usePlan()
@@ -272,6 +310,11 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
 
   const clickCell = (line: number, lane: number, occupant?: Unit) => {
     if (!canAct) return
+    if (picked !== null) {
+      if (occupant) onAction({ type: 'equip', slot: picked, uid: occupant.uid })
+      setPicked(null)
+      return
+    }
     if (sel) {
       if (occupant?.uid === sel.uid) return setSelected(null)
       onAction({ type: 'move', uid: sel.uid, line, lane })
@@ -281,20 +324,26 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
   const drop = (e: React.DragEvent, line: number, lane: number) => {
     e.preventDefault()
     const uid = e.dataTransfer.getData('text/plain')
+    if (uid.startsWith('item:')) {
+      const occupant = view.units.find((u) => u.line === line && u.lane === lane)
+      if (occupant) onAction({ type: 'equip', slot: Number(uid.slice(5)), uid: occupant.uid })
+      setPicked(null)
+      return
+    }
     if (uid && view.units.some((u) => u.uid === uid)) onAction({ type: 'move', uid, line, lane })
     setSelected(null)
   }
   const cell = (line: number, lane: number, occupant: Unit | undefined, cls: string) => (
     <div
       key={`${line}-${lane}`}
-      className={`cell ${cls} ${sel ? 'target' : ''}`}
+      className={`cell ${cls} ${sel || (canAct && picked !== null) ? 'target' : ''}`}
       onClick={() => clickCell(line, lane, occupant)}
       onDragOver={(e) => canAct && e.preventDefault()}
       onDrop={(e) => canAct && drop(e, line, lane)}
     >
       {occupant && defs[occupant.def] && (
         <div draggable={canAct} onDragStart={(e) => e.dataTransfer.setData('text/plain', occupant.uid)} onMouseEnter={() => setHover({ def: occupant.def, stars: occupant.stars })}>
-          <PlayerCard unit={occupant} def={defs[occupant.def]} photo={photos[occupant.def]} selected={occupant.uid === sel?.uid} />
+          <PlayerCard unit={occupant} def={defs[occupant.def]} photo={photos[occupant.def]} selected={occupant.uid === sel?.uid} item={itemOf(occupant)} />
         </div>
       )}
     </div>
@@ -319,6 +368,7 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
       <section className="side">
         <SynergyList list={view.synergies} meta={meta} title="Your team" />
         {(meta.augments?.length ?? 0) > 0 && <AugmentList meta={meta} list={view.augments} />}
+        {(meta.items?.length ?? 0) > 0 && <KitBag meta={meta} items={view.items ?? []} picked={canAct ? picked : null} canAct={canAct && !busy} onPick={(i) => (setPicked(i), setSelected(null))} />}
         <PlayerSheet stars={shown?.stars ?? 1} def={shown ? defs[shown.def] : null} meta={meta} photo={shown ? photos[shown.def] : undefined} />
       </section>
 
@@ -355,7 +405,7 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
                   <div key={`${line}-${row}`} className="cell enemy-cell">
                     {u && defs[u.def] && (
                       <div onMouseEnter={() => setHover({ def: u.def, stars: u.stars })}>
-                        <PlayerCard unit={u} def={defs[u.def]} photo={photos[u.def]} enemy />
+                        <PlayerCard unit={u} def={defs[u.def]} photo={photos[u.def]} enemy item={itemOf(u)} />
                       </div>
                     )}
                   </div>
@@ -367,7 +417,7 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
             <div className="cell enemy-cell gk-cell">
               {oppKeeper && defs[oppKeeper.def] && (
                 <div onMouseEnter={() => setHover({ def: oppKeeper.def, stars: oppKeeper.stars })}>
-                  <PlayerCard unit={oppKeeper} def={defs[oppKeeper.def]} photo={photos[oppKeeper.def]} enemy />
+                  <PlayerCard unit={oppKeeper} def={defs[oppKeeper.def]} photo={photos[oppKeeper.def]} enemy item={itemOf(oppKeeper)} />
                 </div>
               )}
             </div>
@@ -414,6 +464,18 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
           >
             {sel && sel.line !== GK ? `Sell +${sellValue(sel)} 💰` : canAct ? 'Sell: select a player or drag him here' : 'Sell'}
           </button>
+          {sel?.item && (
+            <button
+              className="sell unequip"
+              disabled={busy}
+              onClick={() => {
+                onAction({ type: 'unequip', uid: sel.uid })
+                setSelected(null)
+              }}
+            >
+              Take off {itemOf(sel)?.icon} {itemOf(sel)?.name}
+            </button>
+          )}
         </div>
 
         <div className="shop">

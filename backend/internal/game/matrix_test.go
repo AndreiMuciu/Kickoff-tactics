@@ -35,7 +35,7 @@ func TestOrderMatrix(t *testing.T) {
 						continue
 					}
 					used[c] = true
-					lu.Units = append(lu.Units, LineupUnit{ids[g.Intn(len(ids))], 1, c[0], c[1]})
+					lu.Units = append(lu.Units, LineupUnit{ids[g.Intn(len(ids))], 1, c[0], c[1], ""})
 				}
 				return lu
 			}

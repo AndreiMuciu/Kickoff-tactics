@@ -7,13 +7,13 @@ import (
 
 func weakTeam() Lineup {
 	return Lineup{Name: "weak", GK: LineupUnit{DefID: AcademyKeeper, Stars: 1}, Units: []LineupUnit{
-		{"maguire", 1, 0, 2}, {"kudus", 1, 1, 2}, {"nunez", 1, 2, 2}, {"pulisic", 1, 2, 0},
+		{"maguire", 1, 0, 2, ""}, {"kudus", 1, 1, 2, ""}, {"nunez", 1, 2, 2, ""}, {"pulisic", 1, 2, 0, ""},
 	}}
 }
 
 func strongTeam() Lineup {
 	return Lineup{Name: "strong", GK: LineupUnit{DefID: "pickford", Stars: 1}, Units: []LineupUnit{
-		{"bastoni", 1, 0, 2}, {"olmo", 1, 1, 2}, {"osimhen", 1, 2, 2}, {"leao", 1, 2, 4},
+		{"bastoni", 1, 0, 2, ""}, {"olmo", 1, 1, 2, ""}, {"osimhen", 1, 2, 2, ""}, {"leao", 1, 2, 4, ""},
 	}}
 }
 
@@ -94,7 +94,7 @@ func TestAllPlayersSimulate(t *testing.T) {
 	var out []LineupUnit
 	for _, p := range Players {
 		if p.Role != "gk" {
-			out = append(out, LineupUnit{p.ID, 1, len(out) % 3, len(out) % 5})
+			out = append(out, LineupUnit{p.ID, 1, len(out) % 3, len(out) % 5, ""})
 		}
 	}
 	for i, p := range Players {
@@ -132,7 +132,7 @@ func TestPenalties(t *testing.T) {
 					continue
 				}
 				used[c] = true
-				lu.Units = append(lu.Units, LineupUnit{ids[g.Intn(len(ids))], 1, c[0], c[1]})
+				lu.Units = append(lu.Units, LineupUnit{ids[g.Intn(len(ids))], 1, c[0], c[1], ""})
 			}
 			return lu
 		}
@@ -186,7 +186,7 @@ func TestKeepersCountForStyles(t *testing.T) {
 			t.Errorf("%s has style %q", p.ID, p.Style)
 		}
 	}
-	lu := Lineup{GK: LineupUnit{DefID: "buffon", Stars: 1}, Units: []LineupUnit{{"maldini", 1, 0, 2}}}
+	lu := Lineup{GK: LineupUnit{DefID: "buffon", Stars: 1}, Units: []LineupUnit{{"maldini", 1, 0, 2, ""}}}
 	_, views := ComputeSynergies(lu)
 	for _, v := range views {
 		if v.ID == "catenaccio" && v.Count == 2 && v.Active == 0 {
@@ -220,7 +220,7 @@ func TestCards(t *testing.T) {
 					continue
 				}
 				used[c] = true
-				lu.Units = append(lu.Units, LineupUnit{ids[g.Intn(len(ids))], 1, c[0], c[1]})
+				lu.Units = append(lu.Units, LineupUnit{ids[g.Intn(len(ids))], 1, c[0], c[1], ""})
 			}
 			return lu
 		}

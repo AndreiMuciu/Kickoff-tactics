@@ -616,3 +616,11 @@ button.danger:disabled { opacity: .5; cursor: not-allowed; }
 .cup-ties p.you { color: var(--gold); }
 .cup-ties .won { font-weight: 700; }
 .cup-winner { color: var(--gold); font-weight: 600; }
+
+/* Items */
+.pcard-item { position: absolute; top: 1px; right: 2px; z-index: 2; font-size: 13px; line-height: 1; background: rgba(6, 11, 24, .85); border-radius: 6px; padding: 2px 3px; }
+.pcard-item.low { top: 18px; }
+.kitbag .kit-item { display: grid; gap: 2px; width: 100%; text-align: left; margin-bottom: 6px; padding: 6px 8px; }
+.kitbag .kit-item small { color: var(--muted); font-weight: 400; }
+.kitbag .kit-item.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+.sell.unequip { flex: 0 0 auto; }

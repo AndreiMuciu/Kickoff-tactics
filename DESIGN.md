@@ -498,6 +498,21 @@ account (`plan`), so it is the same in a solo season, a live series and every lo
   short of the next tier.
 - The plan never buys, sells or moves anyone.
 
+## Items [in demo]
+
+`game/item.go`, 2026-11-24 (his request, TFT-like kit): every third round's transfer window
+(`ItemEvery`, rounds 3, 6, 9...; every mode) drops one random item into the club's kit bag
+(`Run.Items`). An item goes on one player (`Unit.Item`, actions `equip` {slot, uid} and `unequip`
+{uid}); equipping another swaps them, and a player who is sold or merged into another copy gives his
+item back (a merged player keeps one). Outfield items multiply one of the wearer's stats in the
+match (`applyItem` on the sim player): Golden Boots shooting +15%, Sprint Spikes pace +15%,
+Playmaker's Compass passing +15%, Ankle Tape dribbling +15%, Steel Shin Pads defending +15%,
+Weighted Vest physical +15%, Energy Drink stamina +30%, Captain's Armband every stat +6%. Grip Gloves
+(+6 reflexes) go only on keepers. Bots hand items to their most valuable players on the pitch. UI:
+the "Kit bag" panel under the augments; click an item then a player, or drag it onto him; a badge on
+the card; "Take off" next to Sell. Opponents' items show on their cards. Solo balance barely moved
+(bot play: 12% champions, Plate 12%, Shield 8%, Crown 2%); generated opponents carry no items.
+
 ## Tutorial [in demo]
 
 `frontend/src/Tutorial.tsx`, 2026-11-24: eight short steps (market, merging, stadium, pitch and

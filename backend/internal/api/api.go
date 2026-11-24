@@ -359,7 +359,7 @@ func (s *Server) meta(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, 200, map[string]any{
 		"players": game.Players, "synergies": game.Synergies, "tactics": game.Tactics, "gkLine": game.GKLine,
 		"halfTicks": game.HalfTicks, "benchSize": game.BenchSize, "rerollCost": game.RerollCost, "baseIncome": game.BaseIncome, "interestStep": game.InterestStep, "interestMax": game.InterestMax, "xpCost": game.XPCost,
-		"augments": game.Augments, "augmentRounds": game.AugmentRounds, "penaltyPrize": game.PenaltyPrize, "penaltyRounds": lobbyWarmup,
+		"augments": game.Augments, "augmentRounds": game.AugmentRounds, "items": game.Items, "itemEvery": game.ItemEvery, "penaltyPrize": game.PenaltyPrize, "penaltyRounds": lobbyWarmup,
 		"storage": s.st.Name(),
 	})
 }
