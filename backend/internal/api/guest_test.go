@@ -58,6 +58,13 @@ func TestGuestPlaysThenClaims(t *testing.T) {
 	if !me.Guest || me.Name != g.Name {
 		t.Fatalf("me: %+v", me)
 	}
+	// A guest has no password: nobody can sign in to one, whatever they type.
+	jar0, _ := cookiejar.New(nil)
+	for _, pw := range []string{"", "a-long-password-1"} {
+		if code := call(t, &http.Client{Jar: jar0}, "POST", ts.URL+"/api/auth/login", map[string]string{"username": g.Name, "password": pw}, nil); code != 401 {
+			t.Fatalf("signed in to a guest with %q: %d", pw, code)
+		}
+	}
 	if code := call(t, c, "POST", ts.URL+"/api/run", nil, nil); code != 201 {
 		t.Fatalf("a guest season: %d", code)
 	}

@@ -99,7 +99,7 @@ export default function Auth({ invitedBy, challenger, onGuest, resetToken, onRes
           >
             {challenger ? 'Accept the challenge ▶' : 'Play now ▶'}
           </button>
-          <small className="muted">No account needed. Create one later to keep your progress and play with friends.</small>
+          <small className="muted">No account needed. A guest's progress lasts about a week in this browser; create an account any time to keep it and play with friends.</small>
           <span className="or">or</span>
         </div>
       )}

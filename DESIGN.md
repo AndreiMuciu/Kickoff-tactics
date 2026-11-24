@@ -612,6 +612,8 @@ shows the season and when it ends; history rows carry their season.
   change (friends, chat, lobbies, series, profile) answers 403 (`guestAllowed` in `api/guest.go`).
   `POST /api/auth/claim` gives the same account a name, email and password, so the season,
   the daily result, statistics and achievements stay. Names starting with `guest_` are reserved.
+  A guest lives as long as its session: 7 days (`SessionTTL`, not sliding), since it has no
+  password to sign in again. The interface says "about a week in this browser".
 - **Daily challenge.** `?daily=1` on the run and match routes plays `daily:<user>`, one stored
   run per manager, replaced the next day. `game.NewDailyRun` seeds from the UTC day, so everyone
   gets the same first market, rivals, league and story; match seeds stay random and secret. It

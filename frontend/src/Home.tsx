@@ -183,7 +183,7 @@ export default function Home({ me, challenger, onDaily, ranked, onRanked, onPart
       </header>
       {me.guest && (
         <div className="notice">
-          You are playing as a guest. Create an account to keep your season and daily results on any device, add friends and play lobbies of eight.{' '}
+          You are playing as a guest: your progress lives in this browser for about a week. Create an account to keep it for good, on any device, and to add friends and play lobbies of eight.{' '}
           <button className="link" onClick={() => setClaim(true)}>
             Create account →
           </button>
