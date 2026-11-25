@@ -623,7 +623,8 @@ export default function Home({ me, challenger, onDaily, ranked, onRanked, onPart
         .{' '}
         <button className="link" onClick={openConsent}>
           Cookie settings
-        </button>
+        </button>{' '}
+        · <a href="/privacy">Privacy policy</a>
       </footer>
     </div>
   )

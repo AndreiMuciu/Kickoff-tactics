@@ -52,7 +52,9 @@ export default function Claim({ onClose, onDone, onLogin }: { onClose: () => voi
             Confirm password
             <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" minLength={8} maxLength={128} required />
           </label>
-          <small className="muted">At least 8 characters. We email you a link to confirm your address.</small>
+          <small className="muted">
+            At least 8 characters. We email you a link to confirm your address. See the <a href="/privacy">privacy policy</a>.
+          </small>
           {error && <p className="form-error">{error}</p>}
           <button className="primary" disabled={busy}>
             Create account

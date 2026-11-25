@@ -141,7 +141,11 @@ export default function Auth({ invitedBy, challenger, onGuest, resetToken, onRes
             <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" minLength={8} maxLength={128} required />
           </label>
         )}
-        {mode === 'signup' && <small className="muted">At least 8 characters. We email you a link to confirm your address.</small>}
+        {mode === 'signup' && (
+          <small className="muted">
+            At least 8 characters. We email you a link to confirm your address. See the <a href="/privacy">privacy policy</a>.
+          </small>
+        )}
         {mode === 'forgot' && <small className="muted">Enter the address of your account and we mail you a link to choose a new password.</small>}
         {error && <p className="form-error">{error}</p>}
         {info && <p className="form-info">{info}</p>}
@@ -166,9 +170,12 @@ export default function Auth({ invitedBy, challenger, onGuest, resetToken, onRes
           </button>
         )}
       </form>
-      <button type="button" className="link cookie-link" onClick={openConsent}>
-        Cookie settings
-      </button>
+      <p className="cookie-link">
+        <button type="button" className="link" onClick={openConsent}>
+          Cookie settings
+        </button>{' '}
+        · <a href="/privacy">Privacy policy</a>
+      </p>
     </div>
   )
 }

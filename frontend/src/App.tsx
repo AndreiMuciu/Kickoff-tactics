@@ -4,6 +4,7 @@ import type { Me, Meta, RankedView, SeriesView } from './api'
 import Auth from './Auth'
 import Consent from './Consent'
 import Feedback from './Feedback'
+import Privacy from './Privacy'
 import Game from './Game'
 import Home from './Home'
 import Series from './Series'
@@ -166,6 +167,14 @@ export default function App() {
     })
   }, [signedIn, liveId, lobbyId])
 
+  // The privacy policy reads the same signed in or not, and is not redirected.
+  if (location.pathname.replace(/\/+$/, '') === '/privacy')
+    return (
+      <>
+        <Privacy />
+        <Consent />
+      </>
+    )
   if (!knownRoute) return <NotFound />
   if (down)
     return (

@@ -62,7 +62,7 @@ export default function Consent() {
   return (
     <div className="cookie-bar" role="region" aria-label="Cookies">
       <span>
-        We use <b>one essential cookie</b> to keep you signed in. With <b>Accept all</b> we also count visits anonymously with Cloudflare Web Analytics: no ads, no tracking across sites. Player photos come from Wikimedia.
+        We use <b>one essential cookie</b> to keep you signed in. With <b>Accept all</b> we also count visits anonymously with Cloudflare Web Analytics: no ads, no tracking across sites. Player photos come from Wikimedia. <a href="/privacy">Privacy policy</a>
       </span>
       <span className="cookie-actions">
         <button onClick={() => pick('essential')}>Essential only</button>

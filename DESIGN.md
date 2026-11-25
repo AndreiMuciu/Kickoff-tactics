@@ -638,6 +638,13 @@ by the page only after consent, with the site token in `Consent.tsx` (public; th
 variable `VITE_CF_ANALYTICS_TOKEN` overrides it). The Web Analytics site is set to manual
 JS-snippet setup: Cloudflare's automatic injection must stay off, or it would load for everyone.
 
+## Privacy policy [in demo]
+
+`/privacy` (`src/Privacy.tsx`), linked from the sign-in page, the sign-up and claim forms, the
+cookie bar and the Home footer. It states retention periods that are constants in the code
+(sessions 7 days, chat 30 days, lobbies 7 days, series 1 day, guests and deleted accounts 30
+days): change the page when they change. Controller contact: contact@kickoff-tactics.com.
+
 ## Not built yet
 
 - Rating by opponent strength (points depend on place and own division only),
