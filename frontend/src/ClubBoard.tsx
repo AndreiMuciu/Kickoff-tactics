@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Action, ItemDef, MatchData, Meta, PlayerDef, RunView, SynergyView, Unit } from './api'
 import { Face } from './Face'
 import { AugmentList, AugmentPicker, Market } from './Market'
@@ -330,6 +330,18 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
   const items = useMemo(() => Object.fromEntries((meta.items ?? []).map((it) => [it.id, it])), [meta])
   const itemOf = (u: Unit) => (u.item ? items[u.item] : undefined)
   const [hover, setHover] = useState<{ def: string; stars: number } | null>(null)
+  // The player card lives in the side column, often far from the pitch (below
+  // it on a phone). While it is out of sight, the player tapped or hovered gets
+  // a floating copy of it, closed with ✕ until another player is chosen.
+  const dock = useRef<HTMLDivElement>(null)
+  const [dockSeen, setDockSeen] = useState(true)
+  useEffect(() => {
+    if (!dock.current) return
+    const io = new IntersectionObserver(([e]) => setDockSeen(e.isIntersecting))
+    io.observe(dock.current)
+    return () => io.disconnect()
+  }, [])
+  const [closedFor, setClosedFor] = useState<string | null>(null)
   const [planning, setPlanning] = useState(false)
   const plan = usePlan()
   const planned = new Set(plan?.players)
@@ -396,6 +408,7 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
     setSelected(null)
   }
   const shown = hover ?? (sel ? { def: sel.def, stars: sel.stars } : null)
+  const shownKey = shown ? `${shown.def}:${shown.stars}` : null
   const canSell = !!sel && sel.line !== GK
 
   return (
@@ -413,8 +426,18 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
             onCombine={(a, b) => (onAction({ type: 'combine', slot: a, slot2: b }), setPicked(null))}
           />
         )}
-        <PlayerSheet stars={shown?.stars ?? 1} def={shown ? defs[shown.def] : null} meta={meta} photo={shown ? photos[shown.def] : undefined} />
+        <div ref={dock}>
+          <PlayerSheet stars={shown?.stars ?? 1} def={shown ? defs[shown.def] : null} meta={meta} photo={shown ? photos[shown.def] : undefined} />
+        </div>
       </section>
+      {shown && defs[shown.def] && !dockSeen && shownKey !== closedFor && (
+        <div className="sheet-float" role="dialog" aria-label="Player card">
+          <button className="sheet-close" aria-label="Close the player card" onClick={() => setClosedFor(shownKey)}>
+            ✕
+          </button>
+          <PlayerSheet stars={shown.stars} def={defs[shown.def]} meta={meta} photo={photos[shown.def]} />
+        </div>
+      )}
 
       <section className="center-col">
         {canAct && <AugmentPicker meta={meta} offer={view.augmentOffer ?? []} canAct={canAct} busy={busy} onAction={onAction} modal owned={view.augments} secondsLeft={windowLeft} />}
@@ -448,7 +471,7 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
                 return (
                   <div key={`${line}-${row}`} className="cell enemy-cell">
                     {u && defs[u.def] && (
-                      <div onMouseEnter={() => setHover({ def: u.def, stars: u.stars })}>
+                      <div onMouseEnter={() => setHover({ def: u.def, stars: u.stars })} onClick={() => setHover({ def: u.def, stars: u.stars })}>
                         <PlayerCard unit={u} def={defs[u.def]} photo={photos[u.def]} enemy item={itemOf(u)} />
                       </div>
                     )}
@@ -460,7 +483,7 @@ export default function ClubBoard({ meta, photos, view, canAct, busy, onAction, 
           <div className="gk-col">
             <div className="cell enemy-cell gk-cell">
               {oppKeeper && defs[oppKeeper.def] && (
-                <div onMouseEnter={() => setHover({ def: oppKeeper.def, stars: oppKeeper.stars })}>
+                <div onMouseEnter={() => setHover({ def: oppKeeper.def, stars: oppKeeper.stars })} onClick={() => setHover({ def: oppKeeper.def, stars: oppKeeper.stars })}>
                   <PlayerCard unit={oppKeeper} def={defs[oppKeeper.def]} photo={photos[oppKeeper.def]} enemy item={itemOf(oppKeeper)} />
                 </div>
               )}

@@ -138,7 +138,9 @@ code { font-size: 12px; word-break: break-all; color: #cbd5e1; }
 .card.completes { box-shadow: 0 0 0 2px var(--gold), 0 0 16px rgba(253, 224, 71, .45); }
 .card.empty { display: grid; place-content: center; color: var(--muted); border: 2px dashed var(--line); border-radius: 8px; }
 .shop-actions { display: flex; gap: 8px; }
-.shop-actions .primary { margin-left: auto; padding: 10px 26px; font-size: 16px; }
+.shop-actions .primary, .primary-float .primary { padding: 10px 26px; font-size: 16px; }
+.primary-slot { margin-left: auto; display: flex; }
+.primary-float { position: fixed; right: 16px; bottom: 16px; z-index: 8; display: flex; box-shadow: 0 10px 30px rgba(0, 0, 0, .55); border-radius: 12px; }
 .odds { font-size: 12px; }
 
 .overlay { position: fixed; inset: 0; background: rgba(4, 8, 18, .88); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 16px; z-index: 10; overflow: auto; }
@@ -174,9 +176,11 @@ code { font-size: 12px; word-break: break-all; color: #cbd5e1; }
 .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #7f1d1d; border: 1px solid #b91c1c; padding: 10px 18px; border-radius: 10px; z-index: 20; box-shadow: 0 8px 30px rgba(0, 0, 0, .5); }
 
 @media (max-width: 1100px) {
-  .layout { grid-template-columns: 1fr; }
-  .side { grid-template-columns: 1fr 1fr; }
-  .match-body { grid-template-columns: 1fr; }
+  /* minmax(0, …): a plain 1fr column grows to its widest child and pushed the pitch off the screen */
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .layout > .center-col { order: -1; } /* the pitch and the market first, the panels after */
+  .side { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .match-body { grid-template-columns: minmax(0, 1fr); }
 }
 .restart { padding: 4px 10px; font-size: 12px; }
 
@@ -251,7 +255,7 @@ input:focus { outline: 2px solid var(--mine); outline-offset: 1px; }
 .chat-log .mine { align-self: flex-end; background: #0c4a6e; }
 .chat-log .theirs { align-self: flex-start; background: var(--panel2); }
 .chat-log .sys { align-self: center; max-width: 100%; font-size: 12px; color: var(--gold); background: none; padding: 2px; }
-@media (max-width: 900px) { .home { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .home { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---- live matches ---- */
 .live-tag { color: #f87171; font-weight: 700; letter-spacing: .5px; font-size: 13px; }
@@ -305,8 +309,8 @@ button.off { opacity: .5; }
 .stand.facing { outline: 1px solid var(--theirs); }
 .final-stand { display: grid; gap: 2px; text-align: left; max-height: 240px; overflow: auto; }
 .lp { font-size: 20px; }
-@media (max-width: 1200px) { .home { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 800px) { .home { grid-template-columns: 1fr; } }
+@media (max-width: 1200px) { .home { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 800px) { .home { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---- finding a lobby ---- */
 .finding { display: grid; gap: 8px; border: 1px solid var(--gold); border-radius: 12px; padding: 12px; background: rgba(253, 224, 71, .05); }
@@ -648,3 +652,73 @@ button.danger:disabled { opacity: .5; cursor: not-allowed; }
 .home-col.challenged .daily { order: -1; }
 .cookie-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .cookie-link { font-size: 12px; color: var(--muted); }
+
+/* ---- phones ---- */
+@media (max-width: 600px) {
+  .top { gap: 8px; padding: 8px 10px; }
+  .top h1 { font-size: 21px; }
+  .top .chip { padding: 4px 9px; font-size: 12.5px; }
+  .hide-phone { display: none; }
+  .hero-actions { flex-wrap: wrap; }
+  .hero-actions button:not(:only-child) { flex: 1 1 100%; }
+  .home { align-content: start; }
+  .credits { padding-bottom: 48px; } /* clear of the Feedback button */
+  .game-top h1 { display: none; } /* ← Home is enough; the chips need the room */
+  .game-top .chip.patience .bar { width: 70px; }
+  .home, .layout { padding: 10px; gap: 12px; }
+  .side { grid-template-columns: minmax(0, 1fr); }
+  /* The pitch gets taller and the cards smaller, so five lanes fit a phone's width. */
+  .pitch { aspect-ratio: 100 / 92; }
+  .pitch .pcard { border-radius: 7px; }
+  .pitch .pcard-name { font-size: 8px; padding: 0 1px; }
+  .pitch .pcard-stars { font-size: 8px; }
+  .half, .gk-col { padding: 3px 2px 18px; gap: 2px; }
+  .line-labels { font-size: 8px; letter-spacing: 0; }
+  .line-labels small { display: none; }
+  .bench-row { flex-direction: column; }
+  .bench { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .bench-cell { min-height: 72px; }
+  .bench .pcard { width: 52px; }
+  .shop-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .card { height: 150px; }
+  .card b { font-size: 13px; }
+  .card-body { padding: 6px 7px; }
+  .primary-slot { margin-left: 0; flex: 1 1 100%; }
+  .primary-slot > *, .primary-float > * { flex: 1; }
+  .primary-float { left: 10px; right: 10px; bottom: 10px; }
+  body:has(.primary-float) .feedback-fab { display: none; }
+  .dialog { padding: 16px; }
+  .feedback-fab { padding: 5px 11px; font-size: 12px; left: 8px; bottom: 8px; }
+  .scoreboard { gap: 8px; padding: 6px 10px; row-gap: 0; }
+  .scoreboard .team { font-size: 15px; }
+  .scoreboard .score { font-size: 26px; }
+  .scoreboard .clock { position: static; grid-column: 1 / -1; text-align: center; }
+}
+
+/* Cards on the pitch follow the pitch's size (container units), so a shorter
+   pitch on a short desktop screen or a narrow phone still fits five lanes. */
+.pitch { container-type: size; }
+.pitch .pcard { width: min(66px, calc(16cqh - 8px), calc(12.5cqw - 4px)); }
+.pitch .gk-col .pcard { width: min(66px, calc(16cqh - 8px), calc(11cqw - 6px)); }
+@media (min-width: 1101px) {
+  /* keep the market and Kick off within reach on laptop screens */
+  .pitch { width: 100%; max-height: max(400px, calc(100vh - 470px)); } /* width: else the ratio shrinks it sideways too */
+}
+@media (min-width: 1101px) and (max-height: 960px) {
+  .card { height: 160px; }
+}
+
+/* A floating player card while the docked one is out of sight */
+.sheet-float { position: fixed; z-index: 12; left: max(16px, calc((100vw - 1500px) / 2 + 16px)); bottom: 60px; width: 240px; /* over the left column, clear of the pitch */ max-height: calc(100vh - 120px); overflow-y: auto; border-radius: 14px; box-shadow: 0 16px 44px rgba(0, 0, 0, .65); animation: pop .15s ease-out; }
+.sheet-float .sheet { border-color: rgba(182, 242, 60, .45); }
+.sheet-close { position: absolute; top: 8px; right: 8px; z-index: 3; padding: 2px 9px; font-size: 13px; background: rgba(6, 11, 24, .85); }
+@media (max-width: 600px) {
+  /* compact on a phone: a thin banner and the stats in two columns, so the pitch stays free to tap */
+  .sheet-float { left: 8px; right: 8px; width: auto; bottom: 72px; max-height: 42vh; }
+  .sheet-float .sheet { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 14px; row-gap: 6px; padding: 10px; }
+  .sheet-float .sheet > :not(.stat) { grid-column: 1 / -1; }
+  .sheet-float .sheet-face { aspect-ratio: 5.5; }
+  .sheet-float .stat { font-size: 12px; }
+}
+.rules summary { cursor: pointer; color: var(--mine); font-size: 13px; }
+.rules p { margin-top: 6px; }

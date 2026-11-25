@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Action, AugmentDef, Meta, PlayerDef, RunView } from './api'
 import { Face } from './Face'
 import type { Photos } from './photos'
@@ -29,6 +29,16 @@ export function Market({ meta, photos, view, canAct, busy, onAction, planned, on
   const defs: Record<string, PlayerDef> = Object.fromEntries(meta.players.map((p) => [p.id, p]))
   const reroll = view.rerollCost ?? meta.rerollCost
   const bench = view.units.filter((u) => u.line < 0).length
+  // The main button (Kick off, or the live timer) floats in the corner while
+  // its place under the market is scrolled out of sight.
+  const slot = useRef<HTMLSpanElement>(null)
+  const [away, setAway] = useState(false)
+  useEffect(() => {
+    if (compact || !slot.current) return
+    const io = new IntersectionObserver(([e]) => setAway(!e.isIntersecting))
+    io.observe(slot.current)
+    return () => io.disconnect()
+  }, [compact])
   return (
     <div className={`market ${compact ? 'compact' : ''}`}>
       <div className="shop-cards" onDragOver={(e) => canAct && onDropSell && e.preventDefault()} onDrop={onDropSell}>
@@ -102,8 +112,13 @@ export function Market({ meta, photos, view, canAct, busy, onAction, planned, on
           {view.level < view.maxLevel ? ` · ${view.xp}/${view.xpNeed} (${meta.xpCost} 💰)` : ' · max'}
         </button>
         {compact && <span className="muted bench-count">Bench {bench}/{meta.benchSize}</span>}
-        {primary}
+        {primary && (
+          <span ref={slot} className="primary-slot">
+            {primary}
+          </span>
+        )}
       </div>
+      {away && primary && <div className="primary-float">{primary}</div>}
     </div>
   )
 }

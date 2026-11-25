@@ -165,7 +165,7 @@ export default function Home({ me, challenger, onDaily, ranked, onRanked, onPart
         ) : (
           <>
         <button className="chip chip-btn" onClick={() => setProfile(true)} title="Profile, statistics, email and password">
-          Manager <b>{me.name}</b>
+          <span className="hide-phone">Manager</span> <b>{me.name}</b>
           {me.newAchievements > 0 && (
             <span className="ach-dot" title={`${me.newAchievements} new achievement${me.newAchievements === 1 ? '' : 's'}`}>
               🏅 {me.newAchievements}
@@ -174,7 +174,7 @@ export default function Home({ me, challenger, onDaily, ranked, onRanked, onPart
           ▾
         </button>
         <button className="restart" onClick={() => setTutorial(true)} title="The rules in eight short steps">
-          📖 How to play
+          📖<span className="hide-phone"> How to play</span>
         </button>
         <button className="restart" onClick={onLogout}>
           Log out
@@ -285,7 +285,11 @@ export default function Home({ me, challenger, onDaily, ranked, onRanked, onPart
                   with the division they finished in.
                 </p>
               )}
-              <p className="muted">Eight managers, everyone starts from scratch with 100 owner's patience. The first two rounds are penalty shootouts between managers, with nothing at stake. After that you are paired with another survivor every round and a defeat costs patience, a little at first and more as the lobby goes on; the last one standing wins. Out early? You can stay and watch the others to the end. Everyone starts at 0 points. Ranked moves them (never below 0): low divisions pay a lot for a good finish and take little for a bad one. It looks for eight managers of your level first; after two minutes bots take the empty seats. Normal is the same game with nothing at stake; after a minute bots take the empty seats.</p>
+              <p className="muted">Eight managers start from scratch; the last club standing wins. Ranked moves your points, Normal is the same game with nothing at stake.</p>
+              <details className="rules">
+                <summary>How lobbies work</summary>
+                <p className="muted">Eight managers, everyone starts from scratch with 100 owner's patience. The first two rounds are penalty shootouts between managers, with nothing at stake. After that you are paired with another survivor every round and a defeat costs patience, a little at first and more as the lobby goes on; the last one standing wins. Out early? You can stay and watch the others to the end. Everyone starts at 0 points. Ranked moves them (never below 0): low divisions pay a lot for a good finish and take little for a bad one. It looks for eight managers of your level first; after two minutes bots take the empty seats. Normal is the same game with nothing at stake; after a minute bots take the empty seats.</p>
+              </details>
               {ranked.watchLobby && (
                 <div className="watch-lobby">
                   <span>

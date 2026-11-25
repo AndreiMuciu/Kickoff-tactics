@@ -193,7 +193,7 @@ export default function Game({ meta, photos, fresh, daily, me, onHome }: Props) 
 
   return (
     <div className="app">
-      <header className="top">
+      <header className="top game-top">
         <button className="restart" onClick={onHome}>
           ← Home
         </button>
