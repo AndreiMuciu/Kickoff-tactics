@@ -174,7 +174,8 @@ export default function Auth({ invitedBy, challenger, onGuest, resetToken, onRes
         <button type="button" className="link" onClick={openConsent}>
           Cookie settings
         </button>{' '}
-        · <a href="/privacy">Privacy policy</a>
+        · <a href="/privacy">Privacy policy</a>{' '}
+        · Contact: <a href="mailto:contact@kickoff-tactics.com">contact@kickoff-tactics.com</a>
       </p>
     </div>
   )

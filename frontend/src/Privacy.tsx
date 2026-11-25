@@ -13,7 +13,9 @@ export default function Privacy() {
         ← Back to the game
       </a>
       <h1>Privacy policy</h1>
-      <p className="muted">Last updated: 25 November 2026</p>
+      <p className="muted">
+        Last updated: 25 November 2026 · Contact: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>
+      </p>
 
       <p>
         Kickoff Tactics is a free browser game made as a hobby project. This page says what data the game keeps about you, why, for how long, and who else sees it. Questions or
